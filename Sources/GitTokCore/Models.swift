@@ -39,6 +39,7 @@ public struct Metric: Codable, Sendable {
     public var status: EvidenceStatus { evidenceStatus ?? .unknown }
 }
 public struct PreviewSection: Codable, Sendable {
+    public let media: PreviewMedia?
     public let kind: String
     public let title: String
     public let body: String?
@@ -46,6 +47,9 @@ public struct PreviewSection: Codable, Sendable {
     public let evidenceMode: String?
 }
 public struct RepoPreview: Codable, Identifiable, Sendable {
+    public let media: PreviewMedia?
+    public let fit: PreviewFit?
+    public let signals: [PreviewSignal]?
     public let id: String
     public let owner: String
     public let name: String
