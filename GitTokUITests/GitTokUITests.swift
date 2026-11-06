@@ -4,19 +4,24 @@ final class GitTokUITests: XCTestCase {
     @MainActor func testConnectionAndRepositoryValidation() {
         let app = XCUIApplication()
         app.launchEnvironment["GITTOK_BASE_URL"] = "http://localhost:1"
+        app.launchEnvironment["GITTOK_PREFERENCES_SUITE"] = "dev.gittok.uitests.\(UUID().uuidString)"
         app.launch()
-        XCTAssertTrue(app.buttons["lookup.open"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["search.open"].waitForExistence(timeout: 10))
+        app.buttons["search.open"].tap()
+        app.swipeUp()
+        XCTAssertTrue(app.buttons["lookup.open"].waitForExistence(timeout: 5))
         app.buttons["lookup.open"].tap()
         let input = app.textFields["lookup.input"]
         XCTAssertTrue(input.waitForExistence(timeout: 5))
         input.tap(); input.typeText("invalid")
         app.buttons["lookup.submit"].tap()
         XCTAssertTrue(app.staticTexts["lookup.error"].exists)
-        XCTAssertTrue(app.staticTexts["Source review only. Software is not executed."].exists)
+        XCTAssertTrue(app.staticTexts["Inspect the sources and available previews."].exists)
     }
     @MainActor func testBackendFailureHasRetryAndSettings() {
         let app = XCUIApplication()
         app.launchEnvironment["GITTOK_BASE_URL"] = "http://localhost:1"
+        app.launchEnvironment["GITTOK_PREFERENCES_SUITE"] = "dev.gittok.uitests.\(UUID().uuidString)"
         app.launch()
         XCTAssertTrue(app.buttons["Try again"].waitForExistence(timeout: 15))
         app.buttons["settings.open"].tap()
@@ -28,10 +33,11 @@ final class GitTokUITests: XCTestCase {
 /// These tests call the checked-in local Postman simulation, never live GitHub.
 /// Start the simulation before xcodebuild test; see README.md.
 @MainActor final class GitTokIntegrationUITests: XCTestCase {
-    private let baseURL = "http://127.0.0.1:18080/gittok"
+    private let baseURL = "http://127.0.0.1:18580/gittok"
     private func launch(_ scenario: String = "") -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["GITTOK_BASE_URL"] = baseURL + scenario
+        app.launchEnvironment["GITTOK_PREFERENCES_SUITE"] = "dev.gittok.uitests.\(UUID().uuidString)"
         app.launch()
         return app
     }
@@ -48,7 +54,7 @@ final class GitTokUITests: XCTestCase {
     func testRealSnapshotFeedToAllClassificationSources() {
         let app = launch()
         let repo = app.buttons["repo.cli/cli"]
-        XCTAssertTrue(repo.waitForExistence(timeout: 15), "Start the local Postman simulation on port 18080 before running native tests.")
+        XCTAssertTrue(repo.waitForExistence(timeout: 15), "Start the local Postman simulation on port 18580 before running native tests.")
         capture(app, "01-folio-discover-real-snapshots")
         reveal(repo, in: app); repo.tap()
         let claim = app.buttons["claim.Why this is a CLI"]
@@ -56,16 +62,20 @@ final class GitTokUITests: XCTestCase {
         reveal(claim, in: app)
         capture(app, "02-cli-source-preview")
         claim.tap()
-        XCTAssertTrue(app.navigationBars["Source notes"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Evidence, not guesswork."].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Evidence: Inferred"].exists)
         XCTAssertTrue(app.staticTexts["Not executed"].exists)
         capture(app, "03-inferred-evidence-excerpt-and-limits")
-        let firstSource = app.staticTexts["cmd/gen-docs/main.go"]
-        reveal(firstSource, in: app); XCTAssertTrue(firstSource.isHittable)
-        let secondSource = app.staticTexts["cmd/gh/main.go"]
-        reveal(secondSource, in: app); XCTAssertTrue(secondSource.isHittable)
-        let thirdSource = app.staticTexts["go.mod"]
-        reveal(thirdSource, in: app); XCTAssertTrue(thirdSource.isHittable)
+        for (index, path) in ["cmd/gen-docs/main.go", "cmd/gh/main.go", "go.mod"].enumerated() {
+            let source = app.descendants(matching: .any).matching(identifier: "evidence.path.\(index)").firstMatch
+            for _ in 0..<12 {
+                if source.exists && source.frame.intersects(app.frame) { break }
+                app.scrollViews["evidence.scroll"].swipeUp()
+            }
+            XCTAssertTrue(source.exists)
+            XCTAssertTrue(source.frame.intersects(app.frame))
+            XCTAssertTrue((source.label + " " + (source.value as? String ?? "")).contains(path))
+        }
         capture(app, "04-all-additional-sources")
     }
     func testEmptyCollectionAndHTTPFailureAreActionable() {
