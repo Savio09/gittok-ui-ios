@@ -8,6 +8,7 @@ struct DetailView: View {
     let onSkip: (() -> Void)?
     @State private var store: DetailStore
     @State private var evidence: EvidencePresentation?
+    @State private var openedInitialEvidence = false
     @Environment(DiscoveryPreferences.self) private var preferences
     @Environment(\.dismiss) private var dismiss
 
@@ -34,6 +35,14 @@ struct DetailView: View {
                         Button("Try again") { Task { await load() } }.buttonStyle(FolioButtonStyle()).accessibilityIdentifier("detail.retry")
                     } else if let repo = store.preview {
                         PreviewPlayer(repo: repo, onEvidence: { evidence = EvidencePresentation(repo: repo, selectedID: $0) }, active: evidence == nil)
+                        if let progress = store.walkthroughProgress {
+                            HStack(spacing: 10) {
+                                ProgressView().controlSize(.small)
+                                Text(progress).font(.caption).foregroundStyle(Folio.secondary)
+                            }.accessibilityElement(children: .combine).accessibilityIdentifier("walkthrough.progress")
+                        } else if let message = store.walkthroughMessage {
+                            Text(message).font(.caption).foregroundStyle(Folio.secondary).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("walkthrough.message")
+                        }
                         identity(repo)
                         interestContext(repo)
                         sourceContext(repo)
@@ -43,14 +52,23 @@ struct DetailView: View {
                 }.padding(.horizontal, 20).padding(.bottom, 28).frame(maxWidth: 600).frame(maxWidth: .infinity)
             }
         }.background(Folio.paper).foregroundStyle(Folio.ink).toolbar(.hidden, for: .navigationBar)
+            // Loading follows this repository view; foregrounding preserves its story and page.
+            // https://developer.apple.com/documentation/swiftui/view/task(id:name:priority:file:line:_:)
             .task(id: address) { await load() }
+            .onDisappear { store.cancel() }
+            .onChange(of: store.preview?.previewPages.map(\.id)) { _, _ in previewChanged() }
             .sheet(item: $evidence) { EvidenceSheet(presentation: $0) }
     }
     private func load() async {
         await store.load(address)
+    }
+    private func previewChanged() {
         if let repo = store.preview {
             preferences.updateSaved(repo); onLoaded(repo)
-            if openEvidenceOnLoad { evidence = EvidencePresentation(repo: repo) }
+            if openEvidenceOnLoad && !openedInitialEvidence {
+                openedInitialEvidence = true
+                evidence = EvidencePresentation(repo: repo)
+            }
         }
     }
     private func identity(_ repo: RepoPreview) -> some View {

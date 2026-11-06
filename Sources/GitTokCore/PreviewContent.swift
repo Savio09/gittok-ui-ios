@@ -58,7 +58,7 @@ extension RepoPreview {
         return identifiedSections.flatMap { identified in
             let section = identified.section
             return (section.claims ?? []).map { claim in
-                let base = contentID([slug.lowercased(), section.kind, section.title, section.body ?? "", section.evidenceMode ?? "", claimKey(claim)])
+                let base = claim.id.map { contentID([slug.lowercased(), identified.id, $0]) } ?? contentID([slug.lowercased(), section.kind, section.title, section.body ?? "", section.evidenceMode ?? "", claimKey(claim)])
                 let occurrence = occurrences[base, default: 0]; occurrences[base] = occurrence + 1
                 return EvidenceEntry(id: "\(base)|\(occurrence)", claim: claim, sectionTitle: section.title, sectionKind: section.kind, sectionID: identified.id, evidenceMode: section.evidenceMode)
             }
@@ -75,7 +75,7 @@ extension RepoPreview {
             return section.media != nil || (section.kind != "decision" && (!(section.body ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !(section.claims ?? []).isEmpty))
         }
         let descriptionIsPresent = contentSections.contains { $0.section.kind == "idea" && $0.section.body?.trimmingCharacters(in: .whitespacesAndNewlines) == description.trimmingCharacters(in: .whitespacesAndNewlines) }
-        if !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !descriptionIsPresent {
+        if !isWalkthrough && !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !descriptionIsPresent {
             pages.append(PreviewPage(id: contentID([slug.lowercased(), "description", description]), title: headline?.isEmpty == false ? headline! : name, body: description, kind: "idea", claims: [], evidenceIDs: [], media: nil, evidenceMode: "not_executed"))
         }
         for identified in contentSections {
@@ -88,7 +88,7 @@ extension RepoPreview {
         var occurrences: [String: Int] = [:]
         return (sections ?? []).map { section in
             let key = [slug.lowercased(), section.kind, section.title, section.body ?? "", section.evidenceMode ?? ""] + (section.claims ?? []).map(claimKey) + (section.media.map(mediaKey) ?? [])
-            let base = contentID(key)
+            let base = section.id.map { contentID([slug.lowercased(), "section", $0]) } ?? contentID(key)
             let occurrence = occurrences[base, default: 0]; occurrences[base] = occurrence + 1
             return (id: "\(base)|\(occurrence)", section: section)
         }

@@ -34,15 +34,19 @@ struct PreviewPlayer: View {
                     PreviewArtifact(media: media, active: active && scenePhase == .active).id(page.id)
                     Label(ExecutionEvidence.label(for: media.evidenceMode), systemImage: media.evidenceMode == "observed_running" ? "play.rectangle" : "info.circle")
                         .font(.caption2).foregroundStyle(Folio.paper.opacity(0.85)).accessibilityIdentifier("preview.media-mode")
+                } else if repo.isWalkthrough {
+                    WalkthroughScene(page: page)
                 } else { SourceOverview(repo: repo, page: page) }
                 VStack(alignment: .leading, spacing: 10) {
                     Text(String(format: "%02d / %@", index + 1, page.media == nil ? "SOURCE STORY" : "PREVIEW")).font(.system(size: 9, weight: .medium)).tracking(1.2).foregroundStyle(Folio.paper.opacity(0.8))
                     Text(page.title).font(Folio.serif(28)).foregroundStyle(Folio.paper).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("preview.title")
-                    if !page.body.isEmpty { Text(page.body).font(.footnote).foregroundStyle(Folio.paper.opacity(0.85)).fixedSize(horizontal: false, vertical: true) }
+                    if !page.body.isEmpty && (!repo.isWalkthrough || page.media != nil) { Text(page.body).font(.footnote).foregroundStyle(Folio.paper.opacity(0.85)).fixedSize(horizontal: false, vertical: true) }
                     if !page.claims.isEmpty {
                         VStack(alignment: .leading, spacing: 7) {
-                            ForEach(Array(page.claims.prefix(2).enumerated()), id: \.offset) { _, claim in
-                                Label(claim.label, systemImage: "link").font(.footnote).foregroundStyle(Folio.paper.opacity(0.9))
+                            if !repo.isWalkthrough {
+                                ForEach(Array(page.claims.prefix(2).enumerated()), id: \.offset) { _, claim in
+                                    Label(claim.label, systemImage: "link").font(.footnote).foregroundStyle(Folio.paper.opacity(0.9))
+                                }
                             }
                             Button { playing = false; onEvidence(page.evidenceIDs.first) } label: { Text("Read the supporting sources →").font(.caption.weight(.semibold)).foregroundStyle(Folio.paper).frame(minHeight: 44) }.accessibilityIdentifier("preview.sources")
                         }
@@ -81,6 +85,30 @@ struct PreviewPlayer: View {
         guard !pages.isEmpty else { return }
         selected = (index + 1) % pages.count
         if pages[index].media?.renderingKind == .video { playing = false }
+    }
+}
+
+/// Scene prose and statement order come directly from the accepted source story.
+/// Numbered markers show reading order, without asserting causal relationships.
+private struct WalkthroughScene: View {
+    let page: PreviewPage
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text("SOURCE WALKTHROUGH").font(.system(size: 9, weight: .medium)).tracking(1.5).foregroundStyle(Folio.secondary)
+            if page.claims.count > 1 {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(Array(page.claims.enumerated()), id: \.offset) { index, _ in
+                            Text("\(index + 1)").font(.caption2.monospacedDigit()).frame(width: 28, height: 28)
+                                .background(Folio.surface.opacity(0.8), in: Circle()).overlay(Circle().stroke(Folio.rule))
+                        }
+                    }
+                }.accessibilityHidden(true)
+            }
+            Text(page.body).font(Folio.serif(23)).fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled).accessibilityIdentifier("preview.story")
+        }.padding(18).frame(maxWidth: .infinity, minHeight: 205, alignment: .leading)
+            .foregroundStyle(Folio.ink).background(Folio.accentLight, in: RoundedRectangle(cornerRadius: 4))
     }
 }
 

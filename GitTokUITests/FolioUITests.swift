@@ -111,4 +111,70 @@ import XCTest
         app.buttons["Close dialog"].tap()
         XCTAssertEqual(title.label, "Declared stack")
     }
+    /// Explicit HTTP fixture verifies client presentation; no model or repository execution.
+    func testAcceptedWalkthroughReplacesSourcePagesAndKeepsContextualEvidence() {
+        let app = application(server: "http://127.0.0.1:18580/gittok/walkthrough")
+        app.launch()
+        let repo = app.buttons["repo.example/row-report"]
+        XCTAssertTrue(repo.waitForExistence(timeout: 15)); repo.tap()
+        let story = app.staticTexts["preview.story"]
+        XCTAssertTrue(story.waitForExistence(timeout: 10))
+        XCTAssertEqual(story.label, "This test project turns incoming rows into a report.")
+        let counter = app.staticTexts["preview.position"]
+        XCTAssertEqual(counter.label, "1 / 2")
+        XCTAssertFalse(app.staticTexts["SOURCE OVERVIEW"].exists)
+        XCTAssertFalse(app.descendants(matching: .any).matching(identifier: "preview.image").firstMatch.exists)
+        var attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = "walkthrough-accepted-purpose"; attachment.lifetime = .keepAlways; add(attachment)
+        let next = app.buttons["preview.next"]
+        for _ in 0..<6 { if next.isHittable { break }; app.swipeUp() }
+        next.tap()
+        XCTAssertEqual(counter.label, "2 / 2")
+        XCTAssertEqual(app.staticTexts["preview.title"].label, "One workflow")
+        XCTAssertEqual(story.label, "A caller passes rows to Summarize.\n\nSummarize aggregates the rows into totals.\n\nThe totals become the returned report.")
+        attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = "walkthrough-accepted-workflow"; attachment.lifetime = .keepAlways; add(attachment)
+        let play = app.buttons["preview.play"]
+        for _ in 0..<6 { if play.isHittable { break }; app.swipeUp() }
+        play.tap()
+        let source = app.buttons["preview.sources"]
+        for _ in 0..<6 { if source.isHittable { break }; app.swipeDown() }
+        source.tap()
+        XCTAssertTrue(app.staticTexts["A caller passes rows to Summarize."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["report.go"].exists)
+        XCTAssertTrue(app.staticTexts["L2-2"].exists)
+        XCTAssertTrue(app.staticTexts["Evidence: Inferred"].exists)
+        XCTAssertTrue(app.staticTexts["Not executed"].exists)
+        app.buttons["evidence.claim.2"].tap()
+        XCTAssertTrue(app.staticTexts["Summarize aggregates the rows into totals."].exists)
+        XCTAssertTrue(app.staticTexts["L3-3"].exists)
+        app.buttons["evidence.claim.3"].tap()
+        XCTAssertTrue(app.staticTexts["The totals become the returned report."].exists)
+        XCTAssertTrue(app.staticTexts["L4-4"].exists)
+        Thread.sleep(forTimeInterval: 5.5)
+        app.buttons["Close dialog"].tap()
+        XCTAssertEqual(counter.label, "2 / 2")
+        XCTAssertEqual(app.staticTexts["preview.title"].label, "One workflow")
+    }
+
+    func testBackgroundingAcceptedWalkthroughPreservesSelectedPage() {
+        let app = application(server: "http://127.0.0.1:18580/gittok/walkthrough")
+        app.launch()
+        let repo = app.buttons["repo.example/row-report"]
+        XCTAssertTrue(repo.waitForExistence(timeout: 15)); repo.tap()
+        let story = app.staticTexts["preview.story"]
+        XCTAssertTrue(story.waitForExistence(timeout: 10))
+        let next = app.buttons["preview.next"]
+        for _ in 0..<6 { if next.isHittable { break }; app.swipeUp() }
+        next.tap()
+        XCTAssertEqual(app.staticTexts["preview.position"].label, "2 / 2")
+        let workflow = "A caller passes rows to Summarize.\n\nSummarize aggregates the rows into totals.\n\nThe totals become the returned report."
+        XCTAssertEqual(story.label, workflow)
+        XCUIDevice.shared.press(.home)
+        app.activate()
+        XCTAssertTrue(story.waitForExistence(timeout: 10))
+        XCTAssertEqual(app.staticTexts["preview.position"].label, "2 / 2")
+        XCTAssertEqual(story.label, workflow)
+        XCTAssertEqual(app.staticTexts["preview.title"].label, "One workflow")
+        let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = "walkthrough-foreground-retains-workflow"; attachment.lifetime = .keepAlways; add(attachment)
+    }
+
 }

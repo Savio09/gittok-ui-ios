@@ -95,4 +95,26 @@ final class PreviewContentTests: XCTestCase {
         XCTAssertNil(try preview(["sections":[capture]]).setupSection)
     }
 
+
+    func testOnlyAcceptedWalkthroughSuppressesRedundantDescriptionPage() throws {
+        let section: [String: Any] = ["id":"scene-1", "kind":"how", "title":"How it works", "body":"A request reaches the handler.", "claims":[["id":"statement-1", "label":"A request reaches the handler.", "source":["ref":"handler.go"], "explanation":"The handler receives the request."]]]
+        let legacy = try preview(["description":"A provider description.", "sections":[section]])
+        let story = try preview(["description":"A provider description.", "presentation":"walkthrough", "sections":[section]])
+        XCTAssertEqual(legacy.previewPages.count, 2)
+        XCTAssertEqual(story.previewPages.count, 1)
+        XCTAssertEqual(story.previewPages.first?.body, "A request reaches the handler.")
+        XCTAssertEqual(story.sections?.first?.id, "scene-1")
+        XCTAssertEqual(story.sections?.first?.claims?.first?.id, "statement-1")
+        XCTAssertEqual(story.evidenceEntries.first?.claim.allSources.map(\.ref), ["handler.go"])
+    }
+    func testAcceptedStatementAndSceneIdentitiesSurviveEditorialChanges() throws {
+        func story(_ body: String) throws -> RepoPreview {
+            try preview(["presentation":"walkthrough", "sections":[["id":"scene-1", "kind":"how", "title":"How it works", "body":body, "claims":[["id":"statement-1", "label":body, "source":["ref":"main.go"], "explanation":body]]]]])
+        }
+        let before = try story("First accepted wording.")
+        let after = try story("Revised accepted wording.")
+        XCTAssertEqual(before.previewPages.first?.id, after.previewPages.first?.id)
+        XCTAssertEqual(before.evidenceEntries.first?.id, after.evidenceEntries.first?.id)
+    }
+
 }
