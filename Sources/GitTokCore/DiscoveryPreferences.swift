@@ -68,11 +68,18 @@ public enum DiscoveryQuery {
     }
     /// Local lexical matching uses provider metadata, never excerpts, limits, or inferred runtime facts.
     public static func matchingInterests(_ repo: RepoPreview, interests: [String]) -> [String] {
-        let metadata = normalized([repo.description, repo.headline ?? ""].joined(separator: " "))
+        let metadata = words([repo.description, repo.headline ?? ""].joined(separator: " "))
         return interests.filter {
             let value = normalized($0)
-            return value == normalized(repo.kindTitle) || value == normalized(repo.language ?? "") || (!value.isEmpty && metadata.contains(value))
+            if value == normalized(repo.kindTitle) || value == normalized(repo.language ?? "") { return true }
+            // Language/type choices require the corresponding metadata field. In
+            // particular, Go must not match Django, MongoDB, or a migration note.
+            guard ["developer tools", "local first", "open source"].contains(value) else { return false }
+            return (" " + metadata + " ").contains(" " + words(value) + " ")
         }
+    }
+    private static func words(_ value: String) -> String {
+        value.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }.joined(separator: " ")
     }
     private static func normalized(_ value: String) -> String {
         value.lowercased().replacingOccurrences(of: "-", with: " ")

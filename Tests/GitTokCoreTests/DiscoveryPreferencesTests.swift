@@ -67,4 +67,11 @@ import XCTest
         subject.updateSaved(try repository("o/r", kind: "library", language: "Rust"))
         XCTAssertEqual(DiscoveryPreferences(defaults: defaults).saved.first?.language, "Rust")
     }
+    func testLanguageInterestsRequireLanguageMetadata() throws {
+        for description in ["Django and MongoDB", "An algorithm library", "Explains migration from Go to Python"] {
+            let object: [String: Any] = ["id":"o/r", "owner":"o", "name":"r", "slug":"o/r", "kind":"backend", "language":"Python", "description":description, "github_url":"https://github.com/o/r"]
+            let repo = try Wire.decoder().decode(RepoPreview.self, from: JSONSerialization.data(withJSONObject: object))
+            XCTAssertTrue(DiscoveryQuery.matchingInterests(repo, interests: ["Go"]).isEmpty)
+        }
+    }
 }
