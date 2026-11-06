@@ -1,6 +1,6 @@
 import Foundation
 
-public enum EvidenceStatus: String, Decodable, Sendable {
+public enum EvidenceStatus: String, Codable, Sendable {
     case supported, inferred, unknown
     public init(from decoder: any Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)
@@ -9,13 +9,13 @@ public enum EvidenceStatus: String, Decodable, Sendable {
     public var title: String { rawValue.capitalized }
 }
 
-public struct Source: Decodable, Hashable, Sendable {
+public struct Source: Codable, Hashable, Sendable {
     public let kind: String?
     public let ref: String
     public let lines: String?
     public let url: String?
 }
-public struct Claim: Decodable, Sendable {
+public struct Claim: Codable, Sendable {
     public let label: String
     public let source: Source
     public let additionalSources: [Source]?
@@ -29,7 +29,7 @@ public struct Claim: Decodable, Sendable {
     public var status: EvidenceStatus { evidenceStatus ?? .unknown }
     public var allSources: [Source] { [source] + (additionalSources ?? []) }
 }
-public struct Metric: Decodable, Sendable {
+public struct Metric: Codable, Sendable {
     public let key: String
     public let label: String
     public let value: String
@@ -38,14 +38,14 @@ public struct Metric: Decodable, Sendable {
     public let evidenceStatus: EvidenceStatus?
     public var status: EvidenceStatus { evidenceStatus ?? .unknown }
 }
-public struct PreviewSection: Decodable, Sendable {
+public struct PreviewSection: Codable, Sendable {
     public let kind: String
     public let title: String
     public let body: String?
     public let claims: [Claim]?
     public let evidenceMode: String?
 }
-public struct RepoPreview: Decodable, Identifiable, Sendable {
+public struct RepoPreview: Codable, Identifiable, Sendable {
     public let id: String
     public let owner: String
     public let name: String
@@ -75,7 +75,7 @@ public struct RepoPreview: Decodable, Identifiable, Sendable {
         ExecutionEvidence.label(for: evidenceMode)
     }
 }
-public struct Feed: Decodable, Sendable {
+public struct Feed: Codable, Sendable {
     public let items: [RepoPreview]
     public let nextCursor: String?
 }
