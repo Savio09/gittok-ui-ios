@@ -16,6 +16,7 @@ public struct Source: Codable, Hashable, Sendable {
     public let url: String?
 }
 public struct Claim: Codable, Sendable {
+    public let id: String?
     public let label: String
     public let source: Source
     public let additionalSources: [Source]?
@@ -39,6 +40,7 @@ public struct Metric: Codable, Sendable {
     public var status: EvidenceStatus { evidenceStatus ?? .unknown }
 }
 public struct PreviewSection: Codable, Sendable {
+    public let id: String?
     public let media: PreviewMedia?
     public let kind: String
     public let title: String
@@ -47,6 +49,8 @@ public struct PreviewSection: Codable, Sendable {
     public let evidenceMode: String?
 }
 public struct RepoPreview: Codable, Identifiable, Sendable {
+    public let presentation: String?
+    public var isWalkthrough: Bool { presentation == "walkthrough" }
     public let media: PreviewMedia?
     public let fit: PreviewFit?
     public let signals: [PreviewSignal]?
@@ -77,6 +81,25 @@ public struct RepoPreview: Codable, Identifiable, Sendable {
     }
     public var executionLabel: String {
         ExecutionEvidence.label(for: evidenceMode)
+    }
+}
+/// Background preparation never changes the provenance of its preview.
+public struct WalkthroughJob: Codable, Sendable {
+    public let id: String
+    public let state: String
+    public let stage: String?
+    public let pollAfterMs: Int?
+    public let preview: RepoPreview?
+    public let message: String?
+    public var isPending: Bool { ["queued", "reading", "writing", "reviewing"].contains(state) }
+    public var pollingDelay: Duration { .milliseconds(min(5_000, max(250, pollAfterMs ?? 1_000))) }
+    public var progressLabel: String {
+        switch state {
+        case "reading": "Reading the project’s sources…"
+        case "writing": "Preparing the walkthrough…"
+        case "reviewing": "Checking the walkthrough’s sources…"
+        default: "Preparing the walkthrough…"
+        }
     }
 }
 public struct Feed: Codable, Sendable {

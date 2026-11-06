@@ -74,4 +74,29 @@ final class NetworkingTests: XCTestCase {
             _ = try Wire.decoder().decode(RepoPreview.self, from: Data(contentsOf: directory.appendingPathComponent(name+".json")))
         }
     }
+
+    func testWalkthroughStartPostsEmptyJSONAndAcceptsQueuedResponse() async throws {
+        let api = client { request in
+            XCTAssertEqual(request.httpMethod, "POST")
+            XCTAssertEqual(request.url?.path, "/v1/repos/o/r/walkthrough")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
+            return (202, Data(#"{"id":"job-1","state":"queued","stage":"Reading sources","poll_after_ms":700}"#.utf8))
+        }
+        let job = try await api.startWalkthrough(RepoAddress("o/r"))
+        XCTAssertEqual(job.id, "job-1")
+        XCTAssertEqual(job.state, "queued")
+        XCTAssertEqual(job.pollAfterMs, 700)
+    }
+    func testWalkthroughLookupDecodesTerminalStateAndOptionalFields() async throws {
+        let api = client { request in
+            XCTAssertEqual(request.httpMethod, "GET")
+            XCTAssertEqual(request.url?.path, "/v1/walkthroughs/job-1")
+            return (200, Data(#"{"id":"job-1","state":"interrupted","poll_after_ms":0,"message":"The worker restarted."}"#.utf8))
+        }
+        let job = try await api.walkthrough("job-1")
+        XCTAssertEqual(job.state, "interrupted")
+        XCTAssertNil(job.preview)
+        XCTAssertEqual(job.message, "The worker restarted.")
+    }
+
 }

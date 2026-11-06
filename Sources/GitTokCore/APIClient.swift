@@ -16,6 +16,12 @@ public enum APIError: LocalizedError, Equatable, Sendable {
 public protocol RepositoryAPI: Sendable {
     func feed(cursor: String?) async throws -> Feed
     func preview(_ address: RepoAddress) async throws -> RepoPreview
+    func startWalkthrough(_ address: RepoAddress) async throws -> WalkthroughJob
+    func walkthrough(_ id: String) async throws -> WalkthroughJob
+}
+extension RepositoryAPI {
+    public func startWalkthrough(_ address: RepoAddress) async throws -> WalkthroughJob { throw APIError.http(501, "Walkthrough unavailable") }
+    public func walkthrough(_ id: String) async throws -> WalkthroughJob { throw APIError.http(501, "Walkthrough unavailable") }
 }
 public struct APIClient: RepositoryAPI, Sendable {
     public let baseURL: URL
@@ -42,10 +48,22 @@ public struct APIClient: RepositoryAPI, Sendable {
     public func preview(_ address: RepoAddress) async throws -> RepoPreview {
         try await get(baseURL.appendingPathComponent("v1/repos").appendingPathComponent(address.owner).appendingPathComponent(address.name).appendingPathComponent("preview"))
     }
+    public func startWalkthrough(_ address: RepoAddress) async throws -> WalkthroughJob {
+        try await get(baseURL.appendingPathComponent("v1/repos").appendingPathComponent(address.owner).appendingPathComponent(address.name).appendingPathComponent("walkthrough"), method: "POST")
+    }
+    public func walkthrough(_ id: String) async throws -> WalkthroughJob {
+        guard !id.isEmpty, id.utf8.count <= 200, id.unicodeScalars.allSatisfy(CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_").contains) else { throw APIError.invalidResponse }
+        return try await get(baseURL.appendingPathComponent("v1/walkthroughs").appendingPathComponent(id))
+    }
     // Apple async URL loading: https://developer.apple.com/documentation/foundation/urlsession/data(for:delegate:)
     private struct ErrorBody: Decodable { let error: String }
-    private func get<T: Decodable & Sendable>(_ url: URL) async throws -> T {
+    private func get<T: Decodable & Sendable>(_ url: URL, method: String = "GET") async throws -> T {
         var request = URLRequest(url: url)
+        request.httpMethod = method
+        if method == "POST" {
+            request.httpBody = Data("{}".utf8)
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        }
         request.timeoutInterval = 20
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         let data: Data, response: URLResponse
