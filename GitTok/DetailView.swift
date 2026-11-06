@@ -3,181 +3,152 @@ import GitTokCore
 
 struct DetailView: View {
     let address: RepoAddress
+    let openEvidenceOnLoad: Bool
+    let onLoaded: (RepoPreview) -> Void
+    let onSkip: (() -> Void)?
     @State private var store: DetailStore
-    @State private var evidence: EvidenceItem?
-    init(address: RepoAddress, api: any RepositoryAPI) {
-        self.address = address; _store = State(initialValue: DetailStore(api: api))
-    }
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
-                if store.isLoading {
-                    ProgressView("Reading repository evidence…").frame(maxWidth: .infinity, minHeight: 200).accessibilityIdentifier("detail.loading")
-                } else if let error = store.error {
-                    StateMessage(title: "Preview unavailable", message: error, symbol: "doc.text.magnifyingglass")
-                    Button("Try again") { Task { await store.load(address) } }.buttonStyle(FolioButtonStyle()).accessibilityIdentifier("detail.retry")
-                } else if let repo = store.preview {
-                    header(repo)
-                    if !(repo.metrics ?? []).isEmpty { metrics(repo.metrics ?? [], evidenceMode: repo.evidenceMode) }
-                    ForEach(Array((repo.sections ?? []).enumerated()), id: \.offset) { _, section in
-                        sectionView(section, evidenceMode: section.evidenceMode ?? repo.evidenceMode)
-                    }
-                    if (repo.sections ?? []).isEmpty {
-                        StateMessage(title: "Evidence is limited", message: "The backend returned repository metadata without a source walkthrough. No execution has been verified.", symbol: "doc.text")
-                    }
-                    if let url = SafeURL.link(repo.githubUrl) {
-                        Link(destination: url) { Label("Open repository", systemImage: "arrow.up.right").frame(maxWidth: .infinity) }
-                            .buttonStyle(FolioButtonStyle()).accessibilityIdentifier("detail.github")
-                    }
-                }
-            }
-            .padding(24).frame(maxWidth: 720, alignment: .leading).frame(maxWidth: .infinity)
-        }
-        .background(Folio.paper).foregroundStyle(Folio.ink)
-        .navigationTitle(address.name).navigationBarTitleDisplayMode(.inline)
-        .task(id: address) { await store.load(address) }
-        .sheet(item: $evidence) { EvidenceSheet(item: $0) }
-    }
-    private func header(_ repo: RepoPreview) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(repo.owner.uppercased()).font(.caption.weight(.semibold)).tracking(1.5).foregroundStyle(Folio.accentText)
-            Text(repo.name).font(.system(.largeTitle, design: .serif)).fontWeight(.medium).accessibilityAddTraits(.isHeader)
-            Text(repo.description.isEmpty ? "No repository description available." : repo.description).font(.title3).foregroundStyle(Folio.secondary)
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 12) { classification(repo); execution(repo) }
-                VStack(alignment: .leading, spacing: 12) { classification(repo); execution(repo) }
-            }
-            if let language = repo.language, !language.isEmpty { Text("\(language)\(repo.license.map { " · \($0)" } ?? "")").font(.subheadline).foregroundStyle(Folio.secondary) }
-            Divider().overlay(Folio.rule)
-            Text("A source-based reading. Check the excerpts and limits before drawing conclusions about behavior.")
-                .font(.footnote).foregroundStyle(Folio.secondary)
-        }.accessibilityIdentifier("detail.content")
-    }
-    private func classification(_ repo: RepoPreview) -> some View {
-        Text("\(repo.kindTitle) · \(repo.kindStatus.title)").font(.caption.weight(.medium)).padding(.vertical, 8).padding(.horizontal, 10).overlay(Rectangle().stroke(Folio.rule))
-    }
-    private func execution(_ repo: RepoPreview) -> some View {
-        Label(repo.executionLabel, systemImage: "doc.text.magnifyingglass").font(.caption.weight(.medium)).foregroundStyle(Folio.secondary)
-    }
-    private func metrics(_ metrics: [Metric], evidenceMode: String?) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("REPOSITORY NOTES").font(.caption2.weight(.semibold)).tracking(1.5).padding(.bottom, 12)
-            ForEach(Array(metrics.enumerated()), id: \.offset) { _, metric in
-                Button { evidence = EvidenceItem(metric: metric, evidenceMode: evidenceMode) } label: {
-                    HStack(alignment: .top) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(metric.value).font(.system(.title2, design: .serif))
-                            Text(metric.label).font(.subheadline).foregroundStyle(Folio.secondary)
-                            Text(metric.status.title).font(.caption).foregroundStyle(Folio.accentText)
-                        }
-                        Spacer()
-                        Image(systemName: "info.circle").padding(.top, 4)
-                    }.padding(.vertical, 16).contentShape(Rectangle())
-                }.buttonStyle(.plain).accessibilityLabel("\(metric.label): \(metric.value). \(metric.status.title). View evidence")
-                Divider().overlay(Folio.rule)
-            }
-        }
-    }
-    private func sectionView(_ section: PreviewSection, evidenceMode: String?) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(section.title).font(.system(.title2, design: .serif)).accessibilityAddTraits(.isHeader)
-            if section.evidenceMode == "not_executed" { Text("Not executed").font(.caption).foregroundStyle(Folio.secondary) }
-            if let body = section.body, !body.isEmpty { Text(body).font(.body).foregroundStyle(Folio.secondary) }
-            ForEach(Array((section.claims ?? []).enumerated()), id: \.offset) { _, claim in
-                Button { evidence = EvidenceItem(claim: claim, evidenceMode: evidenceMode) } label: {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack(alignment: .top) {
-                            Text(claim.label).font(.headline)
-                            Spacer(minLength: 12)
-                            Image(systemName: "arrow.up.right").foregroundStyle(Folio.accentText)
-                        }
-                        Text(claim.explanation).font(.subheadline).foregroundStyle(Folio.secondary)
-                        HStack(spacing: 8) {
-                            Text(claim.status.title).font(.caption.weight(.semibold)).foregroundStyle(Folio.accentText)
-                            Text("· \(claim.allSources.count) source\(claim.allSources.count == 1 ? "" : "s")").font(.caption).foregroundStyle(Folio.secondary)
-                        }
-                    }.frame(maxWidth: .infinity, alignment: .leading).padding(16).background(.white.opacity(0.5))
-                        .overlay(Rectangle().stroke(Folio.rule)).contentShape(Rectangle())
-                }.buttonStyle(.plain).accessibilityIdentifier("claim.\(claim.label)")
-            }
-        }
-    }
-}
-
-struct EvidenceItem: Identifiable {
-    let id = UUID()
-    let title: String
-    let status: EvidenceStatus
-    let confidence: String?
-    let stance: String?
-    let sources: [Source]
-    let excerpt: String?
-    let explanation: String
-    let supports: String?
-    let limit: String?
-    let evidenceMode: String?
-    init(claim: Claim, evidenceMode: String?) {
-        self.evidenceMode = evidenceMode
-        title = claim.label; status = claim.status; confidence = claim.confidence; stance = claim.stance
-        sources = claim.allSources; excerpt = claim.excerpt; explanation = claim.explanation; supports = claim.supports; limit = claim.limit
-    }
-    init(metric: Metric, evidenceMode: String?) {
-        self.evidenceMode = evidenceMode
-        title = "\(metric.label): \(metric.value)"; status = metric.status; confidence = metric.confidence; stance = nil
-        sources = metric.source.map { [$0] } ?? []; excerpt = nil
-        explanation = "This repository note was reported by the backend from the source below."
-        supports = nil; limit = "Repository metadata does not verify runtime behavior."
-    }
-}
-
-struct EvidenceSheet: View {
-    let item: EvidenceItem
+    @State private var evidence: EvidencePresentation?
+    @Environment(DiscoveryPreferences.self) private var preferences
     @Environment(\.dismiss) private var dismiss
+
+    init(address: RepoAddress, api: any RepositoryAPI, openEvidenceOnLoad: Bool = false, onLoaded: @escaping (RepoPreview) -> Void = { _ in }, onSkip: (() -> Void)? = nil) {
+        self.address = address; self.openEvidenceOnLoad = openEvidenceOnLoad; self.onLoaded = onLoaded; self.onSkip = onSkip
+        _store = State(initialValue: DetailStore(api: api))
+    }
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
+            HStack {
+                Button { dismiss() } label: { Image(systemName: "chevron.left").frame(width: 44, height: 44) }.accessibilityLabel("Back")
+                Spacer()
+                Text("Project preview").font(.footnote.weight(.medium))
+                Spacer()
+                if let repo = store.preview { BookmarkButton(repo: repo) }
+                else { Color.clear.frame(width: 44, height: 44) }
+            }.padding(.horizontal, 12).frame(minHeight: 50)
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    Text(item.title).font(.system(.title, design: .serif)).accessibilityAddTraits(.isHeader)
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Evidence: \(item.status.title)").font(.headline).foregroundStyle(Folio.accentText).accessibilityIdentifier("evidence.status")
-                        if let confidence = item.confidence { Text("Backend confidence: \(confidence)").font(.subheadline) }
-                        if let stance = item.stance, !stance.isEmpty { Text("Fit stance: \(stance)").font(.subheadline) }
-                        Text(ExecutionEvidence.label(for: item.evidenceMode)).font(.subheadline).foregroundStyle(Folio.secondary)
+                    if store.isLoading {
+                        ProgressView("Reading repository evidence…").frame(maxWidth: .infinity, minHeight: 260).accessibilityIdentifier("detail.loading")
+                    } else if let error = store.error {
+                        StateMessage(title: "Preview unavailable", message: error, symbol: "doc.text.magnifyingglass")
+                        Button("Try again") { Task { await load() } }.buttonStyle(FolioButtonStyle()).accessibilityIdentifier("detail.retry")
+                    } else if let repo = store.preview {
+                        PreviewPlayer(repo: repo, onEvidence: { evidence = EvidencePresentation(repo: repo, selectedID: $0) }, active: evidence == nil)
+                        identity(repo)
+                        interestContext(repo)
+                        sourceContext(repo)
+                        beforeYouClone(repo)
+                        decisionActions(repo)
                     }
-                    evidenceText("WHAT THE SOURCE SHOWS", item.explanation)
-                    if let excerpt = item.excerpt, !excerpt.isEmpty {
-                        VStack(alignment: .leading, spacing: 12) {
-                            eyebrow("EXACT EXCERPT")
-                            Text(excerpt).font(.system(.callout, design: .monospaced)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading).padding(16).background(.white.opacity(0.65))
-                        }.accessibilityIdentifier("evidence.excerpt")
-                    }
-                    if let supports = item.supports, !supports.isEmpty { evidenceText("SUPPORTS", supports) }
-                    evidenceText("LIMITS", item.limit.flatMap { $0.isEmpty ? nil : $0 } ?? "No specific limit was supplied. This evidence does not establish that the software runs.")
-                    VStack(alignment: .leading, spacing: 16) {
-                        eyebrow("ALL SOURCES · \(item.sources.count)")
-                        if item.sources.isEmpty { Text("No source was supplied. Treat this note as unknown.").foregroundStyle(Folio.secondary) }
-                        ForEach(Array(item.sources.enumerated()), id: \.offset) { index, source in
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("\(index + 1). \(source.kind?.capitalized ?? "Source")").font(.caption.weight(.semibold)).foregroundStyle(Folio.secondary)
-                                Text(source.ref).font(.system(.body, design: .monospaced)).textSelection(.enabled)
-                                if let lines = source.lines, !lines.isEmpty { Text("Lines \(lines)").font(.caption).foregroundStyle(Folio.secondary) }
-                                if let url = SafeURL.link(source.url) {
-                                    Link(destination: url) { Label("Open source \(index + 1)", systemImage: "arrow.up.right").frame(minHeight: 44) }
-                                    Text(url.absoluteString).font(.caption).foregroundStyle(Folio.secondary).textSelection(.enabled)
-                                } else { Text("No valid source link supplied.").font(.caption).foregroundStyle(Folio.secondary) }
-                                Divider().overlay(Folio.rule)
-                            }.accessibilityIdentifier("evidence.source.\(index)")
-                        }
-                    }
-                }.padding(24).frame(maxWidth: 720, alignment: .leading).frame(maxWidth: .infinity)
+                }.padding(.horizontal, 20).padding(.bottom, 28).frame(maxWidth: 600).frame(maxWidth: .infinity)
             }
-            .background(Folio.paper).foregroundStyle(Folio.ink)
-            .navigationTitle("Source notes").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.frame(minHeight: 44) } }
+        }.background(Folio.paper).foregroundStyle(Folio.ink).toolbar(.hidden, for: .navigationBar)
+            .task(id: address) { await load() }
+            .sheet(item: $evidence) { EvidenceSheet(presentation: $0) }
+    }
+    private func load() async {
+        await store.load(address)
+        if let repo = store.preview {
+            preferences.updateSaved(repo); onLoaded(repo)
+            if openEvidenceOnLoad { evidence = EvidencePresentation(repo: repo) }
         }
     }
-    private func eyebrow(_ text: String) -> some View { Text(text).font(.caption2.weight(.semibold)).tracking(1.5).foregroundStyle(Folio.secondary) }
-    private func evidenceText(_ label: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 10) { eyebrow(label); Text(value).textSelection(.enabled).fixedSize(horizontal: false, vertical: true) }
+    private func identity(_ repo: RepoPreview) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                RepositoryMark(repo: repo)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(repo.name).font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
+                    Text("\(repo.owner) / \(repo.name)").font(.caption2).foregroundStyle(Folio.secondary)
+                }
+                Spacer(minLength: 0)
+                Text(repo.kindTitle).font(.caption2).foregroundStyle(Folio.secondary).padding(.horizontal, 9).padding(.vertical, 6).overlay(Capsule().stroke(Folio.rule))
+            }
+            RepositoryStats(repo: repo)
+            if repo.kindStatus == .unknown { Text("Project type is not established by the available evidence.").font(.caption2).foregroundStyle(Folio.secondary) }
+        }.accessibilityIdentifier("detail.content")
+    }
+    private func interestContext(_ repo: RepoPreview) -> some View {
+        let matches = DiscoveryQuery.matchingInterests(repo, interests: preferences.interests)
+        return VStack(alignment: .leading, spacing: 10) {
+            Label(repo.fit?.summary?.isEmpty == false ? "WHO MIGHT FIND THIS USEFUL" : "A CONNECTION TO YOUR INTERESTS", systemImage: "bolt").font(.system(size: 9, weight: .semibold)).tracking(0.7).foregroundStyle(Folio.accentText)
+            Text(repo.fit?.summary.flatMap { $0.isEmpty ? nil : $0 } ?? (matches.isEmpty ? "No match is established from the available project information. You can change your interests in You." : "\(matches.joined(separator: ", ")) matches your selected interests in the project’s metadata."))
+                .font(.footnote).fixedSize(horizontal: false, vertical: true)
+        }.padding(15).frame(maxWidth: .infinity, alignment: .leading).background(Folio.accentLight, in: RoundedRectangle(cornerRadius: 4))
+    }
+    private func sourceContext(_ repo: RepoPreview) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("What the preview is based on").font(.subheadline.weight(.semibold))
+                Spacer(minLength: 4)
+                Button("View all") { evidence = EvidencePresentation(repo: repo) }.font(.caption).foregroundStyle(Folio.accentText).frame(minHeight: 44).accessibilityIdentifier("detail.sources")
+            }
+            if repo.evidenceEntries.isEmpty {
+                Text("No source claims were supplied for this preview. Metadata alone does not verify the project’s behavior.").font(.footnote).foregroundStyle(Folio.secondary)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(repo.evidenceEntries.prefix(4).enumerated()), id: \.element.id) { index, entry in
+                        Button { evidence = EvidencePresentation(repo: repo, selectedID: entry.id) } label: {
+                            HStack(alignment: .center, spacing: 10) {
+                                Image(systemName: "link").foregroundStyle(Folio.accentText).frame(width: 30, height: 30).background(Folio.accentLight, in: RoundedRectangle(cornerRadius: 8))
+                                VStack(alignment: .leading, spacing: 5) {
+                                    Text(entry.claim.label).font(.caption.weight(.semibold)).foregroundStyle(Folio.ink)
+                                    Text(entry.claim.source.ref).font(.system(.caption2, design: .monospaced)).foregroundStyle(Folio.secondary)
+                                }.frame(maxWidth: .infinity, alignment: .leading)
+                                Image(systemName: "arrow.right").font(.caption2).foregroundStyle(Folio.secondary)
+                            }.padding(12).contentShape(Rectangle())
+                        }.buttonStyle(.plain).accessibilityIdentifier("claim.\(entry.claim.label)")
+                        if index < min(3, repo.evidenceEntries.count - 1) { Rectangle().fill(Folio.rule).frame(height: 0.5) }
+                    }
+                }.background(Folio.surface, in: RoundedRectangle(cornerRadius: 4)).overlay(RoundedRectangle(cornerRadius: 4).stroke(Folio.rule))
+                if repo.evidenceEntries.count > 4 {
+                    Button("Explore all \(repo.evidenceEntries.count) source claims →") { evidence = EvidencePresentation(repo: repo) }.font(.caption).foregroundStyle(Folio.accentText).frame(minHeight: 44)
+                }
+            }
+        }
+    }
+    private func beforeYouClone(_ repo: RepoPreview) -> some View {
+        let setup = repo.setupSection
+        let firstFile = repo.evidenceEntries.flatMap { $0.claim.allSources }.first(where: { $0.kind == "file" })
+        let notes = (repo.sections ?? []).filter { $0.kind == "decision" }.compactMap(\.body).filter { !$0.isEmpty }
+        return VStack(alignment: .leading, spacing: 14) {
+            Text("Before you clone").font(.subheadline.weight(.semibold))
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 10) { setupFact("Setup notes", setup?.claims?.first?.label ?? setup?.body.flatMap { $0.isEmpty ? nil : $0 } ?? "Not established"); setupFact("Source to inspect", firstFile?.ref ?? "Open the repository") }
+                VStack(alignment: .leading, spacing: 10) { setupFact("Setup notes", setup?.claims?.first?.label ?? setup?.body.flatMap { $0.isEmpty ? nil : $0 } ?? "Not established"); setupFact("Source to inspect", firstFile?.ref ?? "Open the repository") }
+            }
+            if let setup, !(setup.claims ?? []).isEmpty {
+                Button("Inspect the declared setup commands →") {
+                    let selected = repo.evidenceEntries.first { $0.sectionKind == "setup" }
+                    evidence = EvidencePresentation(repo: repo, selectedID: selected?.id)
+                }.font(.caption).foregroundStyle(Folio.accentText).frame(minHeight: 44)
+            }
+            ForEach(Array(notes.enumerated()), id: \.offset) { _, note in
+                Label { Text(note).font(.caption).fixedSize(horizontal: false, vertical: true) } icon: { Image(systemName: "info.circle") }.foregroundStyle(Folio.secondary).padding(12).frame(maxWidth: .infinity, alignment: .leading).background(Folio.surface, in: RoundedRectangle(cornerRadius: 8))
+            }
+            Label("Code inspection does not confirm that the project runs successfully. Check the current repository and its setup instructions.", systemImage: "info.circle").font(.caption2).foregroundStyle(Folio.secondary).fixedSize(horizontal: false, vertical: true)
+            if !(repo.metrics ?? []).isEmpty {
+                DisclosureGroup("Repository notes") {
+                    ForEach(Array((repo.metrics ?? []).enumerated()), id: \.offset) { index, metric in
+                        Button { evidence = EvidencePresentation(repo: repo, metric: metric, metricIndex: index) } label: {
+                            HStack { Text(metric.label); Spacer(); Text(metric.value); Image(systemName: "info.circle") }.font(.caption).padding(.vertical, 9)
+                        }.buttonStyle(.plain)
+                    }
+                }.font(.footnote).tint(Folio.accentText)
+            }
+        }
+    }
+    private func setupFact(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) { Text(label).font(.caption2).foregroundStyle(Folio.secondary); Text(value).font(.system(.caption, design: .monospaced)).fixedSize(horizontal: false, vertical: true) }
+            .padding(12).frame(maxWidth: .infinity, alignment: .leading).background(Folio.surface, in: RoundedRectangle(cornerRadius: 12)).overlay(RoundedRectangle(cornerRadius: 12).stroke(Folio.rule))
+    }
+    private func decisionActions(_ repo: RepoPreview) -> some View {
+        VStack(spacing: 10) {
+            if let url = SafeURL.link(repo.githubUrl) {
+                Link(destination: url) { HStack { Text("Open repository"); Spacer(); Image(systemName: "arrow.up.right") } }.buttonStyle(FolioButtonStyle()).accessibilityIdentifier("detail.github")
+            }
+            Button { preferences.toggleSaved(repo) } label: { Label(preferences.isSaved(repo.slug) ? "Saved for later" : "Save for later", systemImage: preferences.isSaved(repo.slug) ? "bookmark.fill" : "bookmark").frame(maxWidth: .infinity) }.buttonStyle(FolioButtonStyle(secondary: true)).accessibilityIdentifier("detail.save")
+            Button { if let onSkip { onSkip() } else { dismiss() } } label: { Label("Skip this project", systemImage: "arrow.right") }.font(.caption).foregroundStyle(Folio.accentText).frame(minHeight: 44).accessibilityIdentifier("detail.skip")
+        }
     }
 }

@@ -33,10 +33,9 @@ struct SettingsView: View {
 }
 
 struct LookupView: View {
-    let api: any RepositoryAPI
+    let onOpen: (RepoAddress) -> Void
     @State private var input = ""
     @State private var error: String?
-    @State private var destination: RepoAddress?
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         NavigationStack {
@@ -52,17 +51,16 @@ struct LookupView: View {
                         if let error { Text(error).foregroundStyle(Folio.accentText).font(.subheadline).accessibilityIdentifier("lookup.error") }
                     }
                     Button(action: open) { Label("Read preview", systemImage: "arrow.right") }.buttonStyle(FolioButtonStyle()).accessibilityIdentifier("lookup.submit")
-                    Text("Source review only. Software is not executed.").font(.footnote).foregroundStyle(Folio.secondary)
+                    Text("Inspect the sources and available previews.").font(.footnote).foregroundStyle(Folio.secondary)
                 }.padding(24)
             }
             .background(Folio.paper).foregroundStyle(Folio.ink)
             .navigationTitle("Open repository").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() }.frame(minHeight: 44) } }
-            .navigationDestination(item: $destination) { DetailView(address: $0, api: api) }
         }
     }
     private func open() {
-        do { destination = try RepoAddress(input); error = nil }
+        do { let address = try RepoAddress(input); error = nil; onOpen(address); dismiss() }
         catch { self.error = error.localizedDescription }
     }
 }
