@@ -27,8 +27,28 @@ public struct Claim: Codable, Sendable {
     public let confidence: String?
     public let stance: String?
     public let evidenceStatus: EvidenceStatus?
+    public let visual: StoryVisual?
     public var status: EvidenceStatus { evidenceStatus ?? .unknown }
     public var allSources: [Source] { [source] + (additionalSources ?? []) }
+    private enum CodingKeys: String, CodingKey {
+        case id, label, source, additionalSources, excerpt, explanation, supports, limit, confidence, stance, evidenceStatus, visual
+    }
+    public init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decodeIfPresent(String.self, forKey: .id)
+        label = try values.decode(String.self, forKey: .label)
+        source = try values.decode(Source.self, forKey: .source)
+        additionalSources = try values.decodeIfPresent([Source].self, forKey: .additionalSources)
+        excerpt = try values.decodeIfPresent(String.self, forKey: .excerpt)
+        explanation = try values.decode(String.self, forKey: .explanation)
+        supports = try values.decodeIfPresent(String.self, forKey: .supports)
+        limit = try values.decodeIfPresent(String.self, forKey: .limit)
+        confidence = try values.decodeIfPresent(String.self, forKey: .confidence)
+        stance = try values.decodeIfPresent(String.self, forKey: .stance)
+        evidenceStatus = try values.decodeIfPresent(EvidenceStatus.self, forKey: .evidenceStatus)
+        // Additive presentation data must never make the accepted evidence unreadable.
+        visual = try? values.decodeIfPresent(StoryVisual.self, forKey: .visual)
+    }
 }
 public struct Metric: Codable, Sendable {
     public let key: String
@@ -47,6 +67,21 @@ public struct PreviewSection: Codable, Sendable {
     public let body: String?
     public let claims: [Claim]?
     public let evidenceMode: String?
+    public let storyboard: Storyboard?
+    private enum CodingKeys: String, CodingKey {
+        case id, media, kind, title, body, claims, evidenceMode, storyboard
+    }
+    public init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decodeIfPresent(String.self, forKey: .id)
+        media = try values.decodeIfPresent(PreviewMedia.self, forKey: .media)
+        kind = try values.decode(String.self, forKey: .kind)
+        title = try values.decode(String.self, forKey: .title)
+        body = try values.decodeIfPresent(String.self, forKey: .body)
+        claims = try values.decodeIfPresent([Claim].self, forKey: .claims)
+        evidenceMode = try values.decodeIfPresent(String.self, forKey: .evidenceMode)
+        storyboard = try? values.decodeIfPresent(Storyboard.self, forKey: .storyboard)
+    }
 }
 public struct RepoPreview: Codable, Identifiable, Sendable {
     public let presentation: String?
