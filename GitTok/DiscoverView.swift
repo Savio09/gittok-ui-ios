@@ -33,6 +33,8 @@ struct FolioDiscoverView: View {
                 }
                 VStack(alignment: .leading, spacing: 0) {
                     masthead
+                    Text("Popular new repositories · created in the last 30 days · 20+ stars. Live pages may change.")
+                        .font(.caption2).foregroundStyle(Folio.secondary).padding(.bottom, 16).accessibilityIdentifier("feed.selection")
                     if !query.isEmpty {
                         HStack { Text("Search: \(query)"); Spacer(); Button { query = "" } label: { Image(systemName: "xmark.circle") }.accessibilityLabel("Clear search").frame(width: 44, height: 44) }.font(.caption).foregroundStyle(Folio.secondary)
                     }

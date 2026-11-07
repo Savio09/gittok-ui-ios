@@ -107,4 +107,29 @@ final class GitTokUITests: XCTestCase {
         for _ in 0..<8 { if app.buttons["repo.cli/cli"].isHittable { break }; app.swipeDown() }
         XCTAssertTrue(app.buttons["repo.cli/cli"].exists)
     }
+    func testOptInLiveDiscoveryLoadsBeyondFirstPage() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard let base = environment["GITTOK_LIVE_BASE_URL"],
+              let first = environment["GITTOK_LIVE_FEED_FIRST"],
+              let next = environment["GITTOK_LIVE_FEED_NEXT"] else {
+            throw XCTSkip("Opt in with the real backend URL and independently fetched first/second page repository slugs.")
+        }
+        let app = XCUIApplication()
+        app.launchEnvironment["GITTOK_BASE_URL"] = base
+        app.launchEnvironment["GITTOK_PREFERENCES_SUITE"] = "dev.gittok.live-discovery.\(UUID().uuidString)"
+        app.launch()
+        XCTAssertTrue(app.buttons["repo.\(first)"].waitForExistence(timeout: 25))
+        XCTAssertTrue(app.staticTexts["feed.selection"].exists)
+        capture(app, "live-public-discovery-first-page")
+        let more = app.buttons["feed.more"]
+        for _ in 0..<55 { if more.isHittable { break }; app.swipeUp() }
+        XCTAssertTrue(more.isHittable)
+        guard more.isHittable else { return }
+        more.tap()
+        let secondPage = app.buttons["repo.\(next)"]
+        XCTAssertTrue(secondPage.waitForExistence(timeout: 25))
+        for _ in 0..<5 { if secondPage.isHittable { break }; app.swipeUp() }
+        XCTAssertTrue(secondPage.isHittable)
+        capture(app, "live-public-discovery-second-page")
+    }
 }

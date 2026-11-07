@@ -90,6 +90,7 @@ public struct RepoPreview: Codable, Identifiable, Sendable {
     public let fit: PreviewFit?
     public let signals: [PreviewSignal]?
     public let id: String
+    public let githubId: Int64?
     public let owner: String
     public let name: String
     public let slug: String

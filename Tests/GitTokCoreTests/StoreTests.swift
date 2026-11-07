@@ -24,6 +24,28 @@ private actor ControlledAPI: RepositoryAPI {
     func resolveDetail(_ index: Int, _ result: Result<RepoPreview, any Error>) { detailWaiters.removeValue(forKey: index)!.resume(with: result) }
 }
 @MainActor final class StoreTests: XCTestCase {
+    func testLivePagesDeduplicateRepositoryRenamesByGitHubIdentity() async throws {
+        let api = ControlledAPI(); let store = FeedStore(api: api)
+        let old = try Wire.decoder().decode(RepoPreview.self, from: Data(#"{"id":"o/old","github_id":42,"owner":"o","name":"old","slug":"o/old","kind":"other","description":"D","github_url":"https://github.com/o/old"}"#.utf8))
+        let renamed = try Wire.decoder().decode(RepoPreview.self, from: Data(#"{"id":"o/new","github_id":42,"owner":"o","name":"new","slug":"o/new","kind":"other","description":"D","github_url":"https://github.com/o/new"}"#.utf8))
+        let first = Task { await store.refresh() }; await api.waitForFeed(1)
+        await api.resolve(0, .success(Feed(items: [old], nextCursor: "next"))); await first.value
+        let more = Task { await store.loadMore() }; await api.waitForFeed(2)
+        await api.resolve(1, .success(Feed(items: [renamed], nextCursor: nil))); await more.value
+        XCTAssertEqual(store.items.count, 1)
+    }
+    func testExpiredCursorRetryRefreshesInsteadOfRepeatingInvalidPage() async throws {
+        let api = ControlledAPI(); let store = FeedStore(api: api)
+        let first = Task { await store.refresh() }; await api.waitForFeed(1)
+        await api.resolve(0, .success(try page(["one"], cursor: "expired"))); await first.value
+        let more = Task { await store.loadMore() }; await api.waitForFeed(2)
+        await api.resolve(1, .failure(APIError.http(400, "Refresh the collection"))); await more.value
+        XCTAssertEqual(store.items.count, 1)
+        let retry = Task { await store.retry() }; await api.waitForFeed(3)
+        let requested = await api.requests; XCTAssertNil(requested[2])
+        await api.resolve(2, .success(try page(["two"]))); await retry.value
+        XCTAssertEqual(store.items.map(\.name), ["two"])
+    }
     private func repo(_ name: String) throws -> RepoPreview {
         try Wire.decoder().decode(RepoPreview.self, from: Data("{\"id\":\"\(name)\",\"owner\":\"o\",\"name\":\"\(name)\",\"slug\":\"o/\(name)\",\"kind\":\"other\",\"description\":\"D\",\"github_url\":\"https://github.com/o/\(name)\"}".utf8))
     }

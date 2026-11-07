@@ -43,6 +43,7 @@ import Observation
             guard generation == token, !Task.isCancelled, !(error is CancellationError) else { return }
             self.error = error.localizedDescription
             paginationFailed = true
+            if case APIError.http(400, _) = error { nextCursor = nil }
         }
     }
     public func retry() async {
@@ -50,8 +51,16 @@ import Observation
         else { await refresh() }
     }
     private func unique(_ repos: [RepoPreview]) -> [RepoPreview] {
-        var seen: Set<String> = []
-        return repos.filter { seen.insert($0.slug.lowercased()).inserted }
+        var slugs: Set<String> = []
+        var identities: Set<Int64> = []
+        return repos.filter { repo in
+            let slug = repo.slug.lowercased()
+            let identity = repo.githubId.flatMap { $0 > 0 ? $0 : nil }
+            guard !slugs.contains(slug), identity.map({ !identities.contains($0) }) ?? true else { return false }
+            slugs.insert(slug)
+            if let identity { identities.insert(identity) }
+            return true
+        }
     }
 }
 @MainActor @Observable public final class DetailStore {
