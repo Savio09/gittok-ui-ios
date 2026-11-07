@@ -7,11 +7,14 @@ import Observation
     public private(set) var error: String?
     public private(set) var walkthroughProgress: String?
     public private(set) var walkthroughMessage: String?
+    public private(set) var preparationPaused = false
     private let api: any RepositoryAPI
     private let maximumPolls: Int
     private let maximumDuration: Duration
     private let wait: @Sendable (Duration) async throws -> Void
     private var generation = UUID()
+    private var loadedAddress: RepoAddress?
+    private var isPreparingWalkthrough = false
     private static let unavailableMessage = "Walkthrough unavailable. You can still explore the source preview."
     public init(api: any RepositoryAPI) {
         self.api = api; maximumPolls = 120; maximumDuration = .seconds(180)
@@ -22,17 +25,38 @@ import Observation
     }
     public func cancel() {
         generation = UUID()
-        isLoading = false; walkthroughProgress = nil; walkthroughMessage = nil
+        if isLoading && preview == nil { error = "Preview loading paused. Please try again." }
+        isLoading = false
+        if isPreparingWalkthrough { preparationPaused = true; walkthroughMessage = nil }
+        isPreparingWalkthrough = false
+        walkthroughProgress = nil
+    }
+    /// A tab retains its preview, including an honest failed/source fallback.
+    /// Returning to it must not automatically submit another paid generation.
+    public func loadIfNeeded(_ address: RepoAddress) async {
+        guard loadedAddress != address else { return }
+        await load(address)
     }
     public func load(_ address: RepoAddress) async {
+        loadedAddress = address; preparationPaused = false
         let token = UUID(); generation = token
         preview = nil; error = nil; walkthroughProgress = nil; walkthroughMessage = nil; isLoading = true
-        defer { if generation == token { isLoading = false; walkthroughProgress = nil } }
+        defer {
+            if generation == token {
+                if Task.isCancelled && preview == nil && error == nil { error = "Preview loading paused. Please try again." }
+                if Task.isCancelled && isPreparingWalkthrough {
+                    preparationPaused = true; walkthroughMessage = nil
+                }
+                isPreparingWalkthrough = false
+                isLoading = false; walkthroughProgress = nil
+            }
+        }
         do {
             let repo = try await api.preview(address)
             try Task.checkCancellation()
             guard generation == token else { return }
             preview = repo
+            isPreparingWalkthrough = true
             isLoading = false
         } catch {
             guard generation == token, !Task.isCancelled, !(error is CancellationError) else { return }
@@ -66,15 +90,18 @@ import Observation
                 guard generation == token else { return }
                 if job.state == "ready", let accepted = job.preview, accepted.isWalkthrough, accepted.slug.lowercased() == expectedSlug.lowercased() {
                     preview = accepted
+                    isPreparingWalkthrough = false
                     walkthroughProgress = nil
                     return
                 }
                 guard job.isPending else {
+                    isPreparingWalkthrough = false
                     walkthroughMessage = Self.unavailableMessage
                     walkthroughProgress = nil
                     return
                 }
                 guard polls < maximumPolls else {
+                    isPreparingWalkthrough = false
                     walkthroughMessage = "The walkthrough is taking longer than expected. You can still explore the source preview."
                     walkthroughProgress = nil
                     return
@@ -88,6 +115,7 @@ import Observation
             }
         } catch {
             guard generation == token, !Task.isCancelled, !(error is CancellationError) else { return }
+            isPreparingWalkthrough = false
             walkthroughMessage = Self.unavailableMessage
             walkthroughProgress = nil
         }

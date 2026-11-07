@@ -4,24 +4,56 @@ import Observation
 /// Device-local preferences; server-backed identity and sync are separate concerns.
 /// https://developer.apple.com/documentation/swiftui/managing-model-data-in-your-app
 @MainActor @Observable public final class DiscoveryPreferences {
-    public static let defaultInterests = ["Backend", "Go"]
+    public static let defaultInterests: [String] = []
     public private(set) var saved: [RepoPreview] = []
-    public private(set) var interests = defaultInterests
+    public var interests: [String] { profile.interests }
+    public private(set) var profile = DeveloperProfile()
+    public private(set) var hasCompletedOnboarding = false
+    public private(set) var onboardingDisposition = OnboardingDisposition.notStarted
+    public private(set) var onboardingDraft: OnboardingDraft?
     public private(set) var resetID = UUID()
     private let defaults: UserDefaults
-    private let key = "gittok.folio.preferences.v1"
-
+    private let key: String
+    private struct LegacySnapshot: Codable { let saved: [RepoPreview]; let interests: [String] }
     private struct Snapshot: Codable {
         let saved: [RepoPreview]
-        let interests: [String]
+        let profile: DeveloperProfile
+        let onboardingVersion: Int
+        let disposition: OnboardingDisposition?
+        let draft: OnboardingDraft?
     }
-    public init(defaults: UserDefaults = .standard) {
+    public init(defaults: UserDefaults = .standard, owner: PreferenceOwner = .guest) {
         self.defaults = defaults
+        key = "gittok.folio.preferences.v2." + owner.storageID
         if let data = defaults.data(forKey: key), let snapshot = try? JSONDecoder().decode(Snapshot.self, from: data) {
-            var seen: Set<String> = []
-            saved = snapshot.saved.filter { seen.insert($0.slug.lowercased()).inserted }
-            interests = snapshot.interests
+            saved = Self.uniqueSaved(snapshot.saved)
+            profile = snapshot.profile
+            hasCompletedOnboarding = snapshot.onboardingVersion >= 1
+            onboardingDisposition = snapshot.disposition ?? (hasCompletedOnboarding ? .completed : .notStarted)
+            onboardingDraft = snapshot.draft
+        } else if owner == .guest, defaults.data(forKey: key) == nil,
+                  let old = defaults.data(forKey: "gittok.folio.preferences.v1"),
+                  let legacy = try? JSONDecoder().decode(LegacySnapshot.self, from: old) {
+            saved = Self.uniqueSaved(legacy.saved)
+            // Preserve ambiguous old defaults for review without claiming user intent.
+            profile = DeveloperProfile(domains: legacy.interests)
+            persist()
         }
+    }
+    private static func uniqueSaved(_ repos: [RepoPreview]) -> [RepoPreview] {
+        var seen: Set<String> = []
+        return repos.filter { seen.insert($0.slug.lowercased()).inserted }
+    }
+    public func saveOnboardingDraft(_ draft: OnboardingDraft) { onboardingDraft = draft; persist() }
+    public func discardOnboardingDraft() { onboardingDraft = nil; persist() }
+    public func completeOnboarding(_ value: DeveloperProfile, skipped: Bool = false) {
+        profile = value
+        onboardingDisposition = skipped ? .skipped : .completed
+        hasCompletedOnboarding = true; onboardingDraft = nil; persist()
+    }
+    public func resetProfile() {
+        profile = DeveloperProfile(); hasCompletedOnboarding = false; onboardingDisposition = .notStarted; onboardingDraft = nil
+        persist()
     }
     public func isSaved(_ slug: String) -> Bool {
         saved.contains { $0.slug.caseInsensitiveCompare(slug) == .orderedSame }
@@ -37,17 +69,24 @@ import Observation
         saved[index] = repo
         persist()
     }
-    public func toggleInterest(_ value: String) {
-        if let index = interests.firstIndex(where: { $0.caseInsensitiveCompare(value) == .orderedSame }) { interests.remove(at: index) }
-        else { interests.append(value) }
+    public func toggleInterest(_ raw: String) {
+        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return }
+        let matches: (String) -> Bool = { $0.caseInsensitiveCompare(value) == .orderedSame }
+        if interests.contains(where: matches) {
+            profile.knownTechnologies.removeAll(where: matches)
+            profile.learningTechnologies.removeAll(where: matches)
+            profile.domains.removeAll(where: matches)
+        } else { profile.domains.append(value) }
+        onboardingDraft = nil
         persist()
     }
     public func reset() {
-        saved = []; interests = Self.defaultInterests; resetID = UUID()
+        saved = []; profile = DeveloperProfile(); onboardingDraft = nil; hasCompletedOnboarding = false; onboardingDisposition = .notStarted; resetID = UUID()
         persist()
     }
     private func persist() {
-        if let data = try? JSONEncoder().encode(Snapshot(saved: saved, interests: interests)) { defaults.set(data, forKey: key) }
+        if let data = try? JSONEncoder().encode(Snapshot(saved: saved, profile: profile, onboardingVersion: hasCompletedOnboarding ? 1 : 0, disposition: onboardingDisposition, draft: onboardingDraft)) { defaults.set(data, forKey: key) }
     }
 }
 
