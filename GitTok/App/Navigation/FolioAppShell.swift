@@ -1,35 +1,12 @@
 import SwiftUI
 import GitTokCore
 
-@main struct GitTokApp: App {
-    @AppStorage("backendURL") private var storedURL = "http://localhost:8080"
-    private var baseURL: String { ProcessInfo.processInfo.environment["GITTOK_BASE_URL"] ?? storedURL }
-    var body: some Scene {
-        WindowGroup { RootView(baseURL: baseURL).id(baseURL).tint(Folio.accentText).preferredColorScheme(.light) }
-    }
-}
-
 struct RepositoryRoute: Hashable {
     let address: RepoAddress
     var evidence = false
 }
 private enum AppTab: String, CaseIterable { case discover, saved, profile }
 private enum AppSheet: String, Identifiable { case search, filters, lookup, settings; var id: String { rawValue } }
-
-struct RootView: View {
-    let baseURL: String
-    var body: some View {
-        if let url = try? APIClient.validatedBaseURL(baseURL) { FolioAppShell(api: APIClient(baseURL: url)) }
-        else {
-            NavigationStack {
-                VStack(spacing: 24) {
-                    StateMessage(title: "Set up your connection", message: "Add your GitTok server address to start exploring.", symbol: "network")
-                    NavigationLink("Connection settings") { SettingsView() }
-                }.padding(24).background(Folio.paper)
-            }
-        }
-    }
-}
 
 struct FolioAppShell: View {
     let api: any RepositoryAPI

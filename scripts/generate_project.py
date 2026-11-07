@@ -13,8 +13,8 @@ def q(value): return json.dumps(str(value))
 def refs(values): return '(' + ', '.join(values) + ')'
 def obj(**kwargs): return '{ ' + ' '.join(f'{k} = {v};' for k,v in kwargs.items()) + ' }'
 def file(path, filetype): return put('file:'+path, obj(isa='PBXFileReference', lastKnownFileType=filetype, path=q(path), sourceTree=q('SOURCE_ROOT')))
-app_files = sorted(str(p.relative_to(ROOT)) for p in (ROOT/'GitTok').glob('*.swift'))
-unit_files = sorted(str(p.relative_to(ROOT)) for p in (ROOT/'Tests/GitTokCoreTests').glob('*.swift'))
+app_files = sorted(str(p.relative_to(ROOT)) for p in (ROOT/'GitTok').rglob('*.swift'))
+unit_files = sorted(str(p.relative_to(ROOT)) for p in (ROOT/'Tests/GitTokCoreTests').rglob('*.swift'))
 ui_files = sorted(str(p.relative_to(ROOT)) for p in (ROOT/'GitTokUITests').glob('*.swift'))
 local_package = put('package', obj(isa='XCLocalSwiftPackageReference', relativePath=q('.')))
 product = put('core-product', obj(isa='XCSwiftPackageProductDependency', package=local_package, productName='GitTokCore'))
@@ -52,7 +52,24 @@ for config in ['Debug','Release']:
     configrefs.append(put('project:'+config,obj(isa='XCBuildConfiguration',name=q(config),buildSettings=obj(**settings))))
 project_config=put('project-configs',obj(isa='XCConfigurationList',buildConfigurations=refs(configrefs),defaultConfigurationIsVisible='0',defaultConfigurationName='Release'))
 all_files=[key for key,value in objects.items() if 'isa = PBXFileReference' in value and 'SOURCE_ROOT' in value]
-main=put('main-group',obj(isa='PBXGroup',children=refs(all_files+[ident('products-group')]),sourceTree=q('<group>')))
+# Real directory groups mirror concern boundaries in Xcode as well as on disk.
+groups = {}
+for key in all_files:
+    value = objects[key]
+    path = json.loads(value.split('path = ', 1)[1].split(';', 1)[0])
+    parent = str(Path(path).parent)
+    groups.setdefault(parent, []).append(key)
+    while parent != '.':
+        ancestor = str(Path(parent).parent)
+        group_id = ident('directory:' + parent)
+        siblings = groups.setdefault(ancestor, [])
+        if group_id not in siblings: siblings.append(group_id)
+        groups.setdefault(parent, [])
+        parent = ancestor
+for path, children in groups.items():
+    if path != '.':
+        put('directory:' + path, obj(isa='PBXGroup', children=refs(children), name=q(Path(path).name), sourceTree=q('<group>')))
+main=put('main-group',obj(isa='PBXGroup',children=refs(groups.get('.', [])+[ident('products-group')]),sourceTree=q('<group>')))
 put('products-group',obj(isa='PBXGroup',children=refs(products),name='Products',sourceTree=q('<group>')))
 put('project',obj(isa='PBXProject',attributes=obj(BuildIndependentTargetsInParallel='YES',LastUpgradeCheck='2600'),buildConfigurationList=project_config,compatibilityVersion=q('Xcode 14.0'),developmentRegion='en',hasScannedForEncodings='0',knownRegions='(en, Base)',mainGroup=main,packageReferences=refs([local_package]),productRefGroup=ident('products-group'),projectDirPath=q(''),projectRoot=q(''),targets=refs([app,unit,ui])))
 project=ROOT/'GitTok.xcodeproj'
