@@ -100,14 +100,12 @@ import XCTest
             next.tap()
         }
         XCTAssertEqual(title.label, "Declared stack")
-        let play = app.buttons["preview.play"]
-        for _ in 0..<6 { if play.isHittable { break }; app.swipeUp() }
-        play.tap()
+        XCTAssertTrue(app.staticTexts["preview.reading-mode"].exists)
+        XCTAssertFalse(app.buttons["preview.play"].exists)
         let source = app.buttons["preview.sources"]
         for _ in 0..<6 { if source.isHittable { break }; app.swipeDown() }
         source.tap()
         XCTAssertTrue(app.staticTexts["Declares github.com/spf13/cobra"].waitForExistence(timeout: 5))
-        Thread.sleep(forTimeInterval: 5.5)
         app.buttons["Close dialog"].tap()
         XCTAssertEqual(title.label, "Declared stack")
     }
@@ -132,9 +130,8 @@ import XCTest
         XCTAssertEqual(app.staticTexts["preview.title"].label, "One workflow")
         XCTAssertEqual(story.label, "A caller passes rows to Summarize.\n\nSummarize aggregates the rows into totals.\n\nThe totals become the returned report.")
         attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = "walkthrough-accepted-workflow"; attachment.lifetime = .keepAlways; add(attachment)
-        let play = app.buttons["preview.play"]
-        for _ in 0..<6 { if play.isHittable { break }; app.swipeUp() }
-        play.tap()
+        XCTAssertTrue(app.staticTexts["preview.reading-mode"].exists)
+        XCTAssertFalse(app.buttons["preview.play"].exists)
         let source = app.buttons["preview.sources"]
         for _ in 0..<6 { if source.isHittable { break }; app.swipeDown() }
         source.tap()
@@ -149,7 +146,6 @@ import XCTest
         app.buttons["evidence.claim.3"].tap()
         XCTAssertTrue(app.staticTexts["The totals become the returned report."].exists)
         XCTAssertTrue(app.staticTexts["L4-4"].exists)
-        Thread.sleep(forTimeInterval: 5.5)
         app.buttons["Close dialog"].tap()
         XCTAssertEqual(counter.label, "2 / 2")
         XCTAssertEqual(app.staticTexts["preview.title"].label, "One workflow")

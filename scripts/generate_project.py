@@ -48,7 +48,7 @@ unit=target('GitTokCoreTests',unit_files,'com.apple.product-type.bundle.unit-tes
 ui=target('GitTokUITests',ui_files,'com.apple.product-type.bundle.ui-testing','xctest',dict(**common,PRODUCT_BUNDLE_IDENTIFIER='dev.gittok.ui-tests',PRODUCT_NAME=q('$(TARGET_NAME)'),GENERATE_INFOPLIST_FILE='YES',TEST_TARGET_NAME='GitTok'),False,[dependency])
 configrefs=[]
 for config in ['Debug','Release']:
-    settings=dict(CLANG_ENABLE_MODULES='YES',SWIFT_OPTIMIZATION_LEVEL=q('-Onone' if config=='Debug' else '-O'),DEBUG_INFORMATION_FORMAT=q('dwarf' if config=='Debug' else 'dwarf-with-dsym'),ENABLE_TESTABILITY='YES' if config=='Debug' else 'NO')
+    settings=dict(CLANG_ENABLE_MODULES='YES',SWIFT_OPTIMIZATION_LEVEL=q('-Onone' if config=='Debug' else '-O'),DEBUG_INFORMATION_FORMAT=q('dwarf' if config=='Debug' else 'dwarf-with-dsym'),ENABLE_TESTABILITY='YES' if config=='Debug' else 'NO',SWIFT_ACTIVE_COMPILATION_CONDITIONS=q('DEBUG' if config=='Debug' else ''))
     configrefs.append(put('project:'+config,obj(isa='XCBuildConfiguration',name=q(config),buildSettings=obj(**settings))))
 project_config=put('project-configs',obj(isa='XCConfigurationList',buildConfigurations=refs(configrefs),defaultConfigurationIsVisible='0',defaultConfigurationName='Release'))
 all_files=[key for key,value in objects.items() if 'isa = PBXFileReference' in value and 'SOURCE_ROOT' in value]

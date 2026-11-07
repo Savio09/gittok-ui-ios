@@ -46,7 +46,9 @@ struct DetailView: View {
                         identity(repo)
                         interestContext(repo)
                         sourceContext(repo)
-                        beforeYouClone(repo)
+                        if let handoff = repo.sections?.first(where: { $0.kind == "handoff" }) {
+                            nextInvestigation(repo, section: handoff)
+                        } else { beforeYouClone(repo) }
                         decisionActions(repo)
                     }
                 }.padding(.horizontal, 20).padding(.bottom, 28).frame(maxWidth: 600).frame(maxWidth: .infinity)
@@ -125,6 +127,27 @@ struct DetailView: View {
             }
         }
     }
+    private func nextInvestigation(_ repo: RepoPreview, section: PreviewSection) -> some View {
+        let narration = (section.claims ?? []).compactMap(\.supports).filter { !$0.isEmpty }.joined(separator: "\n\n")
+        let entry = repo.evidenceEntries.first { $0.sectionKind == "handoff" }
+        return VStack(alignment: .leading, spacing: 12) {
+            Text("Your next investigation").font(.subheadline.weight(.semibold))
+            Text(narration.isEmpty ? (section.body ?? "Inspect the cited repository sources.") : narration)
+                .font(.footnote).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("detail.handoff")
+            if let entry {
+                Button { evidence = EvidencePresentation(repo: repo, selectedID: entry.id) } label: {
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: "text.magnifyingglass")
+                        Text(entry.claim.source.ref).font(.system(.caption, design: .monospaced)).fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                        Image(systemName: "arrow.right")
+                    }.frame(minHeight: 44)
+                }.foregroundStyle(Folio.accentText).accessibilityIdentifier("detail.handoff-source")
+            }
+            Text("A direction to explore from source inspection. Execution and setup have not been verified.")
+                .font(.caption2).foregroundStyle(Folio.secondary)
+        }.padding(15).background(Folio.surface, in: RoundedRectangle(cornerRadius: 4)).overlay(RoundedRectangle(cornerRadius: 4).stroke(Folio.rule))
+    }
     private func beforeYouClone(_ repo: RepoPreview) -> some View {
         let setup = repo.setupSection
         let firstFile = repo.evidenceEntries.flatMap { $0.claim.allSources }.first(where: { $0.kind == "file" })
@@ -132,8 +155,8 @@ struct DetailView: View {
         return VStack(alignment: .leading, spacing: 14) {
             Text("Before you clone").font(.subheadline.weight(.semibold))
             ViewThatFits(in: .horizontal) {
-                HStack(alignment: .top, spacing: 10) { setupFact("Setup notes", setup?.claims?.first?.label ?? setup?.body.flatMap { $0.isEmpty ? nil : $0 } ?? "Not established"); setupFact("Source to inspect", firstFile?.ref ?? "Open the repository") }
-                VStack(alignment: .leading, spacing: 10) { setupFact("Setup notes", setup?.claims?.first?.label ?? setup?.body.flatMap { $0.isEmpty ? nil : $0 } ?? "Not established"); setupFact("Source to inspect", firstFile?.ref ?? "Open the repository") }
+                HStack(alignment: .top, spacing: 10) { setupFact("Setup notes", setup?.claims?.first?.supports ?? setup?.body.flatMap { $0.isEmpty ? nil : $0 } ?? "Not established"); setupFact("Source to inspect", firstFile?.ref ?? "Open the repository") }
+                VStack(alignment: .leading, spacing: 10) { setupFact("Setup notes", setup?.claims?.first?.supports ?? setup?.body.flatMap { $0.isEmpty ? nil : $0 } ?? "Not established"); setupFact("Source to inspect", firstFile?.ref ?? "Open the repository") }
             }
             if let setup, !(setup.claims ?? []).isEmpty {
                 Button("Inspect the declared setup commands →") {
