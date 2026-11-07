@@ -6,3 +6,6 @@ DerivedData/
 xcuserdata/
 *.xcresult
 .env
+
+.clerk/
+Config/Clerk.local.xcconfig

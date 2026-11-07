@@ -15,9 +15,14 @@ def obj(**kwargs): return '{ ' + ' '.join(f'{k} = {v};' for k,v in kwargs.items(
 def file(path, filetype): return put('file:'+path, obj(isa='PBXFileReference', lastKnownFileType=filetype, path=q(path), sourceTree=q('SOURCE_ROOT')))
 app_files = sorted(str(p.relative_to(ROOT)) for p in (ROOT/'GitTok').rglob('*.swift'))
 unit_files = sorted(str(p.relative_to(ROOT)) for p in (ROOT/'Tests/GitTokCoreTests').rglob('*.swift'))
-ui_files = sorted(str(p.relative_to(ROOT)) for p in (ROOT/'GitTokUITests').glob('*.swift'))
+ui_files = sorted(str(p.relative_to(ROOT)) for p in (ROOT/'GitTokUITests').rglob('*.swift'))
 local_package = put('package', obj(isa='XCLocalSwiftPackageReference', relativePath=q('.')))
 product = put('core-product', obj(isa='XCSwiftPackageProductDependency', package=local_package, productName='GitTokCore'))
+clerk_package = put('clerk-package', obj(isa='XCRemoteSwiftPackageReference', repositoryURL=q('https://github.com/clerk/clerk-ios.git'), requirement=obj(kind='exactVersion', version='1.7.1')))
+clerk_products = [put('clerk-product:'+name, obj(isa='XCSwiftPackageProductDependency',package=clerk_package,productName=name)) for name in ['ClerkKit','ClerkKitUI']]
+app_config = file('Config/App.xcconfig', 'text.xcconfig')
+file('GitTok.entitlements', 'text.plist.entitlements')
+
 products = []
 def target(name, files, producttype, extension, settings, package=False, deps=[]):
     product_ref = put('product:'+name, obj(isa='PBXFileReference', explicitFileType=q('wrapper.application' if extension=='app' else 'wrapper.cfbundle'), includeInIndex='0', path=q(name+'.'+extension), sourceTree='BUILT_PRODUCTS_DIR'))
@@ -28,20 +33,28 @@ def target(name, files, producttype, extension, settings, package=False, deps=[]
         source_refs.append(put('build:'+name+path, obj(isa='PBXBuildFile', fileRef=f)))
     sources=put('sources:'+name, obj(isa='PBXSourcesBuildPhase', buildActionMask='2147483647', files=refs(source_refs), runOnlyForDeploymentPostprocessing='0'))
     frameworks=[]
-    if package: frameworks=[put('framework:'+name, obj(isa='PBXBuildFile', productRef=product))]
+    linked_products=([product] if package else []) + (clerk_products if name=='GitTok' else [])
+    frameworks=[put('framework:'+name+str(i),obj(isa='PBXBuildFile',productRef=prod)) for i,prod in enumerate(linked_products)]
     frameworks=put('frameworks:'+name, obj(isa='PBXFrameworksBuildPhase', buildActionMask='2147483647',files=refs(frameworks),runOnlyForDeploymentPostprocessing='0'))
     resource_refs=[]
+    if name=='GitTok':
+        for path in sorted((ROOT/'GitTok/Resources').rglob('*')):
+            if path.suffix in ['.storyboard','.ttf','.otf'] or path.suffix=='.xcassets':
+                rel=str(path.relative_to(ROOT))
+                kind={'.storyboard':'file.storyboard','.ttf':'file','.otf':'file','.xcassets':'folder.assetcatalog'}[path.suffix]
+                f=file(rel,kind)
+                resource_refs.append(put('resource:'+rel,obj(isa='PBXBuildFile',fileRef=f)))
     if name=='GitTokCoreTests':
         f=file('Tests/GitTokCoreTests/Fixtures','folder')
         resource_refs=[put('fixture-build',obj(isa='PBXBuildFile',fileRef=f))]
     resources=put('resources:'+name,obj(isa='PBXResourcesBuildPhase',buildActionMask='2147483647',files=refs(resource_refs),runOnlyForDeploymentPostprocessing='0'))
     configs=[]
     for config in ['Debug','Release']:
-        configs.append(put('config:'+name+config,obj(isa='XCBuildConfiguration',name=q(config),buildSettings=obj(**dict(settings, ONLY_ACTIVE_ARCH='YES' if config=='Debug' else 'NO')))))
+        configs.append(put('config:'+name+config,obj(isa='XCBuildConfiguration',name=q(config),**({'baseConfigurationReference':app_config} if name=='GitTok' else {}),buildSettings=obj(**dict(settings, ONLY_ACTIVE_ARCH='YES' if config=='Debug' else 'NO')))))
     configlist=put('configs:'+name,obj(isa='XCConfigurationList',buildConfigurations=refs(configs),defaultConfigurationIsVisible='0',defaultConfigurationName='Release'))
-    return put('target:'+name,obj(isa='PBXNativeTarget',buildConfigurationList=configlist,buildPhases=refs([sources,frameworks,resources]),buildRules='()',dependencies=refs(deps),name=q(name),packageProductDependencies=refs([product] if package else []),productName=q(name),productReference=product_ref,productType=q(producttype)))
+    return put('target:'+name,obj(isa='PBXNativeTarget',buildConfigurationList=configlist,buildPhases=refs([sources,frameworks,resources]),buildRules='()',dependencies=refs(deps),name=q(name),packageProductDependencies=refs(linked_products),productName=q(name),productReference=product_ref,productType=q(producttype)))
 common=dict(SWIFT_VERSION='6.0',IPHONEOS_DEPLOYMENT_TARGET='18.0',SDKROOT='iphoneos',SUPPORTED_PLATFORMS=q('iphoneos iphonesimulator'),TARGETED_DEVICE_FAMILY=q('1,2'),CODE_SIGN_STYLE='Automatic',SWIFT_STRICT_CONCURRENCY='complete')
-app=target('GitTok',app_files,'com.apple.product-type.application','app',dict(**common,PRODUCT_BUNDLE_IDENTIFIER='dev.gittok.ios',PRODUCT_NAME=q('$(TARGET_NAME)'),INFOPLIST_FILE=q('GitTok/Info.plist'),GENERATE_INFOPLIST_FILE='NO',MARKETING_VERSION='0.1.0',CURRENT_PROJECT_VERSION='1',SWIFT_EMIT_LOC_STRINGS='YES'),True)
+app=target('GitTok',app_files,'com.apple.product-type.application','app',dict(**common,PRODUCT_BUNDLE_IDENTIFIER='dev.gittok.ios',PRODUCT_NAME=q('$(TARGET_NAME)'),INFOPLIST_FILE=q('GitTok/Info.plist'),GENERATE_INFOPLIST_FILE='NO',MARKETING_VERSION='0.1.0',CURRENT_PROJECT_VERSION='2',SWIFT_EMIT_LOC_STRINGS='YES',CODE_SIGN_ENTITLEMENTS=q('GitTok.entitlements')),True)
 proxy=put('proxy',obj(isa='PBXContainerItemProxy',containerPortal=ident('project'),proxyType='1',remoteGlobalIDString=app,remoteInfo='GitTok'))
 dependency=put('app-dependency',obj(isa='PBXTargetDependency',target=app,targetProxy=proxy))
 unit=target('GitTokCoreTests',unit_files,'com.apple.product-type.bundle.unit-test','xctest',dict(**common,PRODUCT_BUNDLE_IDENTIFIER='dev.gittok.core-tests',PRODUCT_NAME=q('$(TARGET_NAME)'),GENERATE_INFOPLIST_FILE='YES'),True)
@@ -71,7 +84,7 @@ for path, children in groups.items():
         put('directory:' + path, obj(isa='PBXGroup', children=refs(children), name=q(Path(path).name), sourceTree=q('<group>')))
 main=put('main-group',obj(isa='PBXGroup',children=refs(groups.get('.', [])+[ident('products-group')]),sourceTree=q('<group>')))
 put('products-group',obj(isa='PBXGroup',children=refs(products),name='Products',sourceTree=q('<group>')))
-put('project',obj(isa='PBXProject',attributes=obj(BuildIndependentTargetsInParallel='YES',LastUpgradeCheck='2600'),buildConfigurationList=project_config,compatibilityVersion=q('Xcode 14.0'),developmentRegion='en',hasScannedForEncodings='0',knownRegions='(en, Base)',mainGroup=main,packageReferences=refs([local_package]),productRefGroup=ident('products-group'),projectDirPath=q(''),projectRoot=q(''),targets=refs([app,unit,ui])))
+put('project',obj(isa='PBXProject',attributes=obj(BuildIndependentTargetsInParallel='YES',LastUpgradeCheck='2600'),buildConfigurationList=project_config,compatibilityVersion=q('Xcode 14.0'),developmentRegion='en',hasScannedForEncodings='0',knownRegions='(en, Base)',mainGroup=main,packageReferences=refs([local_package,clerk_package]),productRefGroup=ident('products-group'),projectDirPath=q(''),projectRoot=q(''),targets=refs([app,unit,ui])))
 project=ROOT/'GitTok.xcodeproj'
 project.mkdir(exist_ok=True)
 (project/'project.pbxproj').write_text('// !$*UTF8*$!\n{ archiveVersion = 1; classes = {}; objectVersion = 60; objects = {\n'+'\n'.join(f'{key} = {value};' for key,value in objects.items())+'\n}; rootObject = '+ident('project')+'; }\n')

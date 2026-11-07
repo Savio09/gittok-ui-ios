@@ -10,7 +10,6 @@ struct FolioSavedView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                FolioHeader(onSearch: onSearch, onProfile: onProfile)
                 VStack(alignment: .leading, spacing: 12) {
                     Text("YOUR SHORTLIST").font(.caption2).tracking(2).foregroundStyle(Folio.secondary)
                     (Text("Worth another look ").foregroundStyle(Folio.ink) + Text("↗").foregroundStyle(Folio.accentText)).font(Folio.serif(30)).tracking(-0.8).accessibilityAddTraits(.isHeader)
@@ -42,5 +41,8 @@ struct FolioSavedView: View {
                 Spacer(minLength: 30)
             }.frame(maxWidth: 600).frame(maxWidth: .infinity)
         }.background(Folio.paper)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                FolioHeader(onSearch: onSearch, onProfile: onProfile).background(Folio.paper).overlay(alignment: .bottom) { Rectangle().fill(Folio.rule).frame(height: 0.5) }
+            }
     }
 }

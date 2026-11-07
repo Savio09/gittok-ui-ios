@@ -7,21 +7,23 @@ struct FolioProfileView: View {
     let onForYou: () -> Void
     let onSettings: () -> Void
     let onLookup: () -> Void
+    let onEdit: () -> Void
+    @State private var confirmReset = false
     @Environment(DiscoveryPreferences.self) private var preferences
     private var choices: [String] {
-        (["Backend", "Frontend", "Go", "Rust", "TypeScript", "Developer tools", "Local-first", "Open source", "Library", "Command line", "Mobile"] + languages)
-            .reduce(into: []) { if !$0.contains($1) { $0.append($1) } }
+        ProfileSelection.options(available: ["Backend", "Frontend", "Go", "Rust", "TypeScript", "Developer tools", "Local-first", "Open source", "Library", "Command line", "Mobile"] + languages, selected: preferences.interests)
     }
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                FolioHeader(onSearch: onSearch, onProfile: {})
                 VStack(spacing: 12) {
                     Image(systemName: "person").font(.system(size: 30, weight: .light)).foregroundStyle(Folio.accentText).frame(width: 76, height: 76).background(Folio.accentLight, in: RoundedRectangle(cornerRadius: 24))
                     Text("Your developer profile").font(Folio.serif(26)).accessibilityAddTraits(.isHeader)
                     Text("Make discovery feel a little more like you.").font(.caption).foregroundStyle(Folio.secondary)
                 }.padding(.top, 25).padding(.bottom, 36)
+                AccountSummary().padding(.horizontal, 24).padding(.bottom, 24)
                 VStack(alignment: .leading, spacing: 16) {
+                    Button("Edit my discovery profile", action: onEdit).buttonStyle(FolioButtonStyle(secondary: true)).accessibilityIdentifier("profile.edit")
                     HStack { Text("Your interests").font(.subheadline.weight(.semibold)); Spacer(); Text("Choose a few").font(.caption2).foregroundStyle(Folio.accentText) }
                     Text("These shape the order of projects in your For you feed.").font(.caption).foregroundStyle(Folio.secondary)
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 102), spacing: 8)], alignment: .leading, spacing: 8) {
@@ -44,10 +46,17 @@ struct FolioProfileView: View {
                     Label("Your saved projects and interests stay on this device.", systemImage: "info.circle").font(.caption).foregroundStyle(Folio.secondary).fixedSize(horizontal: false, vertical: true)
                     Button(action: onLookup) { Label("Open a repository by name", systemImage: "arrow.up.right").frame(maxWidth: .infinity, alignment: .leading) }.font(.footnote).frame(minHeight: 44).accessibilityIdentifier("profile.lookup")
                     Button(action: onSettings) { Label("Connection settings", systemImage: "gearshape").frame(maxWidth: .infinity, alignment: .leading) }.font(.footnote).frame(minHeight: 44).accessibilityIdentifier("settings.open")
-                    Button("Reset preferences") { preferences.reset() }.frame(maxWidth: .infinity).buttonStyle(FolioButtonStyle(secondary: true)).accessibilityIdentifier("profile.reset")
+                    Button("Reset discovery profile") { confirmReset = true }.frame(maxWidth: .infinity).buttonStyle(FolioButtonStyle(secondary: true)).accessibilityIdentifier("profile.reset")
                 }.padding(.horizontal, 24).padding(.bottom, 30)
             }.frame(maxWidth: 600).frame(maxWidth: .infinity)
         }.background(Folio.paper)
+            .alert("Reset discovery profile?", isPresented: $confirmReset) {
+                Button("Cancel", role: .cancel) {}
+                Button("Reset profile", role: .destructive) { preferences.resetProfile(); onEdit() }
+            } message: { Text("Your saved projects will be kept. You can choose new interests in the profile setup.") }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                FolioHeader(onSearch: onSearch, onProfile: {}).background(Folio.paper).overlay(alignment: .bottom) { Rectangle().fill(Folio.rule).frame(height: 0.5) }
+            }
     }
     private func profileCount(_ count: Int, _ label: String) -> some View {
         VStack(spacing: 5) { Text("\(count)").font(.title2.weight(.semibold)); Text(label).font(.caption2).foregroundStyle(Folio.secondary) }.frame(maxWidth: .infinity)

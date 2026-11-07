@@ -3,15 +3,14 @@ import GitTokCore
 
 struct RootView: View {
     let baseURL: String
+    @Environment(AccountSession.self) private var account
+    private var api: any RepositoryAPI {
+        if let url = try? APIClient.validatedBaseURL(baseURL) { return APIClient(baseURL: url) }
+        return UnavailableRepositoryAPI()
+    }
     var body: some View {
-        if let url = try? APIClient.validatedBaseURL(baseURL) { FolioAppShell(api: APIClient(baseURL: url)) }
-        else {
-            NavigationStack {
-                VStack(spacing: 24) {
-                    StateMessage(title: "Set up your connection", message: "Add your GitTok server address to start exploring.", symbol: "network")
-                    NavigationLink("Connection settings") { SettingsView() }
-                }.padding(24).background(Folio.paper)
-            }
-        }
+        FolioAppShell(api: api, owner: account.owner)
+            .id(account.owner.storageID)
+            .onChange(of: account.owner) { _, _ in account.isPresented = false }
     }
 }

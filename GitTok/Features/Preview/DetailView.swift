@@ -6,33 +6,29 @@ struct DetailView: View {
     let openEvidenceOnLoad: Bool
     let onLoaded: (RepoPreview) -> Void
     let onSkip: (() -> Void)?
+    let isActive: Bool
     @State private var store: DetailStore
     @State private var evidence: EvidencePresentation?
     @State private var openedInitialEvidence = false
+    @State private var loadAttempt = 0
+    @State private var handledAttempt = 0
+    private struct LoadRequest: Hashable { let address: RepoAddress; let attempt: Int; let active: Bool }
     @Environment(DiscoveryPreferences.self) private var preferences
     @Environment(\.dismiss) private var dismiss
 
-    init(address: RepoAddress, api: any RepositoryAPI, openEvidenceOnLoad: Bool = false, onLoaded: @escaping (RepoPreview) -> Void = { _ in }, onSkip: (() -> Void)? = nil) {
-        self.address = address; self.openEvidenceOnLoad = openEvidenceOnLoad; self.onLoaded = onLoaded; self.onSkip = onSkip
+    init(address: RepoAddress, api: any RepositoryAPI, openEvidenceOnLoad: Bool = false, isActive: Bool = true, onLoaded: @escaping (RepoPreview) -> Void = { _ in }, onSkip: (() -> Void)? = nil) {
+        self.address = address; self.openEvidenceOnLoad = openEvidenceOnLoad; self.isActive = isActive; self.onLoaded = onLoaded; self.onSkip = onSkip
         _store = State(initialValue: DetailStore(api: api))
     }
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Button { dismiss() } label: { Image(systemName: "chevron.left").frame(width: 44, height: 44) }.accessibilityLabel("Back")
-                Spacer()
-                Text("Project preview").font(.footnote.weight(.medium))
-                Spacer()
-                if let repo = store.preview { BookmarkButton(repo: repo) }
-                else { Color.clear.frame(width: 44, height: 44) }
-            }.padding(.horizontal, 12).frame(minHeight: 50)
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     if store.isLoading {
                         ProgressView("Reading repository evidence…").frame(maxWidth: .infinity, minHeight: 260).accessibilityIdentifier("detail.loading")
                     } else if let error = store.error {
                         StateMessage(title: "Preview unavailable", message: error, symbol: "doc.text.magnifyingglass")
-                        Button("Try again") { Task { await load() } }.buttonStyle(FolioButtonStyle()).accessibilityIdentifier("detail.retry")
+                        Button("Try again") { loadAttempt += 1 }.buttonStyle(FolioButtonStyle()).accessibilityIdentifier("detail.retry")
                     } else if let repo = store.preview {
                         if let progress = store.walkthroughProgress {
                             HStack(spacing: 10) {
@@ -40,9 +36,18 @@ struct DetailView: View {
                                 Text(progress).font(.caption).foregroundStyle(Folio.secondary)
                             }.accessibilityElement(children: .combine).accessibilityIdentifier("walkthrough.progress")
                         } else if let message = store.walkthroughMessage {
-                            Text(message).font(.caption).foregroundStyle(Folio.secondary).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("walkthrough.message")
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(message).font(.caption).foregroundStyle(Folio.secondary).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("walkthrough.message")
+                                Button("Try walkthrough again") { loadAttempt += 1 }.font(.caption.weight(.semibold)).frame(minHeight: 44).accessibilityIdentifier("walkthrough.retry")
+                            }
                         }
-                        PreviewPlayer(repo: repo, onEvidence: { evidence = EvidencePresentation(repo: repo, selectedID: $0) }, active: evidence == nil)
+                        if store.preparationPaused {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Walkthrough preparation paused.").font(.caption).foregroundStyle(Folio.secondary)
+                                Button("Resume walkthrough") { loadAttempt += 1 }.font(.caption.weight(.semibold)).frame(minHeight: 44).accessibilityIdentifier("walkthrough.resume")
+                            }
+                        }
+                        PreviewPlayer(repo: repo, onEvidence: { evidence = EvidencePresentation(repo: repo, selectedID: $0) }, active: isActive && evidence == nil)
                         identity(repo)
                         interestContext(repo)
                         sourceContext(repo)
@@ -53,16 +58,24 @@ struct DetailView: View {
                     }
                 }.padding(.horizontal, 20).padding(.bottom, 28).frame(maxWidth: 600).frame(maxWidth: .infinity)
             }
-        }.background(Folio.paper).foregroundStyle(Folio.ink).toolbar(.hidden, for: .navigationBar)
+        }.background(Folio.paper).foregroundStyle(Folio.ink).navigationTitle("Project preview")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.visible, for: .navigationBar)
+            .toolbarBackground(Folio.paper, for: .navigationBar)
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { if let repo = store.preview { BookmarkButton(repo: repo) } } }
             // Loading follows this repository view; foregrounding preserves its story and page.
             // https://developer.apple.com/documentation/swiftui/view/task(id:name:priority:file:line:_:)
-            .task(id: address) { await load() }
-            .onDisappear { store.cancel() }
+            .task(id: LoadRequest(address: address, attempt: loadAttempt, active: isActive)) {
+                guard isActive, !Task.isCancelled else { return }
+                if loadAttempt != handledAttempt {
+                    handledAttempt = loadAttempt
+                    await store.load(address)
+                } else { await store.loadIfNeeded(address) }
+            }
+            .onChange(of: isActive) { _, active in if !active { handledAttempt = loadAttempt; store.cancel() } }
+            .onDisappear { handledAttempt = loadAttempt; store.cancel() }
             .onChange(of: store.preview?.previewPages.map(\.id)) { _, _ in previewChanged() }
             .sheet(item: $evidence) { EvidenceSheet(presentation: $0) }
-    }
-    private func load() async {
-        await store.load(address)
     }
     private func previewChanged() {
         if let repo = store.preview {

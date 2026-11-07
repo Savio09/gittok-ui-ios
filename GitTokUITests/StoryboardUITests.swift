@@ -8,7 +8,7 @@ import XCTest
         app.launchEnvironment["GITTOK_PREFERENCES_SUITE"] = "dev.gittok.storyboard.\(suite)"
         if unavailable { app.launchEnvironment["GITTOK_NARRATION_DRIVER"] = "unavailable" }
         else if manual { app.launchEnvironment["GITTOK_NARRATION_DRIVER"] = "manual" }
-        app.launch()
+        app.launchForReturningUser()
         return app
     }
     private func open(_ app: XCUIApplication) {
@@ -80,7 +80,7 @@ import XCTest
         XCTAssertFalse(app.staticTexts["Verified setup"].exists)
         let save = app.buttons["save.example/row-report"]
         reveal(save, in: app, up: false); save.tap()
-        app.terminate(); app.launch(); app.buttons["nav.saved"].tap()
+        app.terminate(); app.launchForReturningUser(); app.tabBars.buttons["Saved"].tap()
         let saved = app.buttons["saved.example/row-report"]
         XCTAssertTrue(saved.waitForExistence(timeout: 5)); saved.tap()
         XCTAssertTrue(app.staticTexts["storyboard.caption"].waitForExistence(timeout: 10))
@@ -130,8 +130,8 @@ import XCTest
         app.launchEnvironment["GITTOK_BASE_URL"] = baseURL
         app.launchEnvironment["GITTOK_PREFERENCES_SUITE"] = "dev.gittok.live-storyboard.\(UUID().uuidString)"
         app.launchEnvironment["GITTOK_NARRATION_DRIVER"] = "native"
-        app.launch()
-        XCTAssertTrue(app.buttons["nav.profile"].waitForExistence(timeout: 10)); app.buttons["nav.profile"].tap()
+        app.launchForReturningUser()
+        XCTAssertTrue(app.tabBars.buttons["You"].waitForExistence(timeout: 10)); app.tabBars.buttons["You"].tap()
         let lookup = app.buttons["profile.lookup"]
         reveal(lookup, in: app); lookup.tap()
         let input = app.textFields["lookup.input"]
@@ -173,7 +173,7 @@ import XCTest
         let save = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "save.")).firstMatch
         reveal(save, in: app, up: false); XCTAssertTrue(save.isHittable); save.tap()
         XCTAssertEqual(save.value as? String, "Saved")
-        app.terminate(); app.launch(); app.buttons["nav.saved"].tap()
+        app.terminate(); app.launchForReturningUser(); app.tabBars.buttons["Saved"].tap()
         let saved = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "saved.")).firstMatch
         XCTAssertTrue(saved.waitForExistence(timeout: 10)); saved.tap()
         XCTAssertTrue(caption.waitForExistence(timeout: 45))

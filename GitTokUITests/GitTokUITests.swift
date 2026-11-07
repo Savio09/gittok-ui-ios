@@ -5,7 +5,7 @@ final class GitTokUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment["GITTOK_BASE_URL"] = "http://localhost:1"
         app.launchEnvironment["GITTOK_PREFERENCES_SUITE"] = "dev.gittok.uitests.\(UUID().uuidString)"
-        app.launch()
+        app.launchForReturningUser()
         XCTAssertTrue(app.buttons["search.open"].waitForExistence(timeout: 10))
         app.buttons["search.open"].tap()
         app.swipeUp()
@@ -22,7 +22,7 @@ final class GitTokUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment["GITTOK_BASE_URL"] = "http://localhost:1"
         app.launchEnvironment["GITTOK_PREFERENCES_SUITE"] = "dev.gittok.uitests.\(UUID().uuidString)"
-        app.launch()
+        app.launchForReturningUser()
         XCTAssertTrue(app.buttons["Try again"].waitForExistence(timeout: 15))
         app.buttons["settings.open"].tap()
         XCTAssertTrue(app.textFields["settings.url"].waitForExistence(timeout: 5))
@@ -38,7 +38,7 @@ final class GitTokUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment["GITTOK_BASE_URL"] = baseURL + scenario
         app.launchEnvironment["GITTOK_PREFERENCES_SUITE"] = "dev.gittok.uitests.\(UUID().uuidString)"
-        app.launch()
+        app.launchForReturningUser()
         return app
     }
     private func capture(_ app: XCUIApplication, _ name: String) {
@@ -117,7 +117,7 @@ final class GitTokUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment["GITTOK_BASE_URL"] = base
         app.launchEnvironment["GITTOK_PREFERENCES_SUITE"] = "dev.gittok.live-discovery.\(UUID().uuidString)"
-        app.launch()
+        app.launchForReturningUser()
         XCTAssertTrue(app.buttons["repo.\(first)"].waitForExistence(timeout: 25))
         XCTAssertTrue(app.staticTexts["feed.selection"].exists)
         capture(app, "live-public-discovery-first-page")

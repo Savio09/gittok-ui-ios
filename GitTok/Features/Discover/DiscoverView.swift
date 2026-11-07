@@ -18,11 +18,6 @@ struct FolioDiscoverView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                FolioHeader(onSearch: onSearch, onProfile: onProfile)
-                feedTabs
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 7) { ForEach(chips, id: \.self) { value in chip(value) } }.padding(.horizontal, 22)
-                }.padding(.vertical, 4)
                 if personalized {
                     HStack(alignment: .top, spacing: 6) {
                         Image(systemName: "bolt")
@@ -70,6 +65,15 @@ struct FolioDiscoverView: View {
                 }.padding(.horizontal, 20)
             }.frame(maxWidth: 600).frame(maxWidth: .infinity)
         }.background(Folio.paper).refreshable { await store.refresh() }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                VStack(spacing: 0) {
+                FolioHeader(onSearch: onSearch, onProfile: onProfile)
+                feedTabs
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 7) { ForEach(chips, id: \.self) { value in chip(value) } }.padding(.horizontal, 22)
+                }.padding(.vertical, 4)
+                }.background(Folio.paper).overlay(alignment: .bottom) { Rectangle().fill(Folio.rule).frame(height: 0.5) }
+            }
     }
     private var feedTabs: some View {
         HStack(spacing: 22) {

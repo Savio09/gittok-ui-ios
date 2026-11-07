@@ -19,10 +19,10 @@ struct FolioStoryCard: View {
             Text(repo.description.isEmpty ? "Open the preview to inspect the available sources." : repo.description).font(.footnote).foregroundStyle(Folio.secondary).fixedSize(horizontal: false, vertical: true)
             RepositoryStats(repo: repo).padding(.top, 14)
             HStack(spacing: 10) {
-                Button(action: onEvidence) { Label(repo.evidenceEntries.isEmpty ? "View sources" : "\(repo.evidenceEntries.count) claims · \(repo.sourceCount) sources", systemImage: "link") }
+                Button(action: onEvidence) { Label(repo.evidenceEntries.isEmpty ? "View sources" : "\(repo.evidenceEntries.count) claims · \(repo.sourceCount) sources", systemImage: "link").frame(minHeight: 44).contentShape(Rectangle()) }
                     .font(.caption2).foregroundStyle(Folio.secondary).frame(minHeight: 44).accessibilityIdentifier("sources.\(repo.slug)")
                 Spacer(minLength: 0)
-                Button(action: onOpen) { Label("Read the preview", systemImage: "arrow.right").labelStyle(.titleAndIcon) }.font(.caption2.weight(.medium)).foregroundStyle(Folio.accentText).frame(minHeight: 44)
+                Button(action: onOpen) { Label("Read the preview", systemImage: "arrow.right").labelStyle(.titleAndIcon).frame(minHeight: 44).contentShape(Rectangle()) }.font(.caption2.weight(.medium)).foregroundStyle(Folio.accentText).frame(minHeight: 44)
             }.padding(.top, 5)
         }.padding(.bottom, 20).overlay(alignment: .top) { Rectangle().fill(Folio.rule).frame(height: 0.7) }
     }

@@ -9,11 +9,11 @@ import XCTest
     }
     func testFolioNavigationAndInterests() {
         let app = application()
-        app.launch()
-        XCTAssertTrue(app.buttons["nav.saved"].waitForExistence(timeout: 10))
-        app.buttons["nav.saved"].tap()
+        app.launchForReturningUser()
+        XCTAssertTrue(app.tabBars.buttons["Saved"].waitForExistence(timeout: 10))
+        app.tabBars.buttons["Saved"].tap()
         XCTAssertTrue(app.staticTexts["Keep something good."].waitForExistence(timeout: 5))
-        app.buttons["nav.profile"].tap()
+        app.tabBars.buttons["You"].tap()
         XCTAssertTrue(app.buttons["interest.TypeScript"].waitForExistence(timeout: 5))
         app.buttons["interest.TypeScript"].tap()
         XCTAssertEqual(app.buttons["interest.TypeScript"].value as? String, "Selected")
@@ -23,14 +23,14 @@ import XCTest
     }
     func testSavedProjectSurvivesRestartAndOpensFreshPreview() {
         let app = application(server: "http://127.0.0.1:18580/gittok")
-        app.launch()
+        app.launchForReturningUser()
         let bookmark = app.buttons["save.cli/cli"]
         XCTAssertTrue(bookmark.waitForExistence(timeout: 15))
         bookmark.tap()
-        app.buttons["nav.saved"].tap()
+        app.tabBars.buttons["Saved"].tap()
         XCTAssertTrue(app.buttons["saved.cli/cli"].waitForExistence(timeout: 5))
-        app.terminate(); app.launch()
-        app.buttons["nav.saved"].tap()
+        app.terminate(); app.launchForReturningUser()
+        app.tabBars.buttons["Saved"].tap()
         app.buttons["saved.cli/cli"].tap()
         XCTAssertTrue(app.staticTexts["Project preview"].waitForExistence(timeout: 10))
         let position = app.staticTexts["preview.position"]
@@ -38,23 +38,31 @@ import XCTest
         XCTAssertTrue(position.exists, app.debugDescription)
         XCTAssertEqual(app.buttons["save.cli/cli"].value as? String, "Saved")
         app.buttons["save.cli/cli"].tap()
-        app.buttons["nav.saved"].tap()
+        app.tabBars.buttons["Saved"].tap()
         XCTAssertTrue(app.staticTexts["Keep something good."].waitForExistence(timeout: 5))
     }
     func testFeedSourceShortcutLoadsActualEvidence() {
         let app = application(server: "http://127.0.0.1:18580/gittok")
-        app.launch()
+        app.launchForReturningUser()
         let source = app.buttons["sources.cli/cli"]
         XCTAssertTrue(source.waitForExistence(timeout: 15))
-        for _ in 0..<5 { if source.isHittable { break }; app.swipeUp() }
+        // XCTest may report a scrolled row as hittable while pinned chrome covers it.
+        for _ in 0..<8 {
+            let top = app.buttons["filter.All"].frame.maxY + 12
+            let bottom = app.tabBars.firstMatch.frame.minY - 12
+            if source.isHittable && source.frame.midY > top && source.frame.midY < bottom { break }
+            let delta: CGFloat = source.frame.midY <= top ? 180 : -180
+            let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.57))
+            start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: delta)))
+        }
         source.tap()
-        XCTAssertTrue(app.staticTexts["Evidence, not guesswork."].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Evidence, not guesswork."].waitForExistence(timeout: 10), app.debugDescription)
         XCTAssertTrue(app.staticTexts["Evidence: Inferred"].exists)
         XCTAssertTrue(app.staticTexts["cmd/gen-docs/main.go"].exists)
     }
     func testVariableMediaPagesLoadImagesThroughHTTP() {
         let app = application(server: "http://127.0.0.1:18580/gittok/presentation")
-        app.launch()
+        app.launchForReturningUser()
         let repo = app.buttons["repo.cli/cli"]
         XCTAssertTrue(repo.waitForExistence(timeout: 15)); repo.tap()
         XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "preview.image").firstMatch.waitForExistence(timeout: 10))
@@ -71,7 +79,7 @@ import XCTest
     }
     func testLookupRetainsSharedNavigationAndSkipReturnsToDiscover() {
         let app = application(server: "http://127.0.0.1:18580/gittok")
-        app.launch(); app.buttons["search.open"].tap()
+        app.launchForReturningUser(); app.buttons["search.open"].tap()
         let lookup = app.buttons["lookup.open"]
         for _ in 0..<6 { if lookup.isHittable { break }; app.swipeUp() }
         lookup.tap()
@@ -79,16 +87,16 @@ import XCTest
         XCTAssertTrue(input.waitForExistence(timeout: 5)); input.tap(); input.typeText("cli/cli")
         app.buttons["lookup.submit"].tap()
         XCTAssertTrue(app.buttons["preview.next"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.buttons["nav.saved"].exists)
+        XCTAssertTrue(app.tabBars.buttons["Saved"].exists)
         let skip = app.buttons["detail.skip"]
         for _ in 0..<12 { if skip.isHittable { break }; app.swipeUp() }
         skip.tap()
-        XCTAssertEqual(app.buttons["nav.discover"].value as? String, "Selected")
+        XCTAssertTrue(app.tabBars.buttons["Discover"].isSelected)
         XCTAssertFalse(app.buttons["preview.next"].exists)
     }
     func testCurrentPageEvidencePausesPlaybackAndSelectsItsOwnClaim() {
         let app = application(server: "http://127.0.0.1:18580/gittok")
-        app.launch()
+        app.launchForReturningUser()
         let repo = app.buttons["repo.cli/cli"]
         XCTAssertTrue(repo.waitForExistence(timeout: 15)); repo.tap()
         let title = app.staticTexts["preview.title"]
@@ -112,7 +120,7 @@ import XCTest
     /// Explicit HTTP fixture verifies client presentation; no model or repository execution.
     func testAcceptedWalkthroughReplacesSourcePagesAndKeepsContextualEvidence() {
         let app = application(server: "http://127.0.0.1:18580/gittok/walkthrough")
-        app.launch()
+        app.launchForReturningUser()
         let repo = app.buttons["repo.example/row-report"]
         XCTAssertTrue(repo.waitForExistence(timeout: 15)); repo.tap()
         let story = app.staticTexts["preview.story"]
@@ -153,7 +161,7 @@ import XCTest
 
     func testBackgroundingAcceptedWalkthroughPreservesSelectedPage() {
         let app = application(server: "http://127.0.0.1:18580/gittok/walkthrough")
-        app.launch()
+        app.launchForReturningUser()
         let repo = app.buttons["repo.example/row-report"]
         XCTAssertTrue(repo.waitForExistence(timeout: 15)); repo.tap()
         let story = app.staticTexts["preview.story"]
@@ -175,7 +183,7 @@ import XCTest
 
     func testFailedWalkthroughStatusAppearsBeforeSourcePreview() {
         let app = application(server: "http://127.0.0.1:18580/gittok/walkthrough-failed")
-        app.launch()
+        app.launchForReturningUser()
         let card = app.buttons["repo.example/row-report"]
         XCTAssertTrue(card.waitForExistence(timeout: 15)); card.tap()
         let message = app.staticTexts["walkthrough.message"]
