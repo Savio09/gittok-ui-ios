@@ -118,7 +118,7 @@ import XCTest
         XCTAssertEqual(app.buttons["preview.play"].label, "Resume narration")
     }
 
-    /// Opt-in only: the coordinator must prepare and authorize this backend job first.
+    /// Opt-in only: the coordinator authorizes real backend generation before running.
     func testOptInPreparedLiveRepositoryThroughLookupSpeechSaveAndEvidence() throws {
         let environment = ProcessInfo.processInfo.environment
         guard let repository = environment["GITTOK_LIVE_REPOSITORY"], !repository.isEmpty,
@@ -137,9 +137,22 @@ import XCTest
         let input = app.textFields["lookup.input"]
         XCTAssertTrue(input.waitForExistence(timeout: 5)); input.tap(); input.typeText(repository)
         app.buttons["lookup.submit"].tap()
+        let expectCold = environment["GITTOK_LIVE_EXPECT_COLD"] == "yes"
+        if expectCold {
+            let progress = app.descendants(matching: .any).matching(identifier: "walkthrough.progress").firstMatch
+            XCTAssertTrue(progress.waitForExistence(timeout: 15), "A cold user request must visibly prepare its own walkthrough.")
+            XCTAssertTrue(progress.isHittable)
+        }
         let caption = app.staticTexts["storyboard.caption"]
-        XCTAssertTrue(caption.waitForExistence(timeout: 45), "The prepared backend must return a valid complete storyboard.")
+        let terminal = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            caption.exists || app.staticTexts["walkthrough.message"].exists
+        }, object: app)
+        XCTAssertEqual(XCTWaiter.wait(for: [terminal], timeout: expectCold ? 180 : 45), .completed)
+        XCTAssertTrue(caption.exists, "The real backend must return a complete storyboard; message: \(app.staticTexts["walkthrough.message"].exists ? app.staticTexts["walkthrough.message"].label : "none")")
+        guard caption.exists else { return }
         let firstNarration = caption.label
+        let overview = XCTAttachment(screenshot: app.screenshot())
+        overview.name = "actual-repository-visual-walkthrough"; overview.lifetime = .keepAlways; add(overview)
         XCTAssertFalse(firstNarration.isEmpty)
         XCTAssertTrue(["concept", "terminal", "flow", "comparison", "source"].contains { kind in
             app.descendants(matching: .any).matching(identifier: "storyboard.visual.\(kind)").firstMatch.exists

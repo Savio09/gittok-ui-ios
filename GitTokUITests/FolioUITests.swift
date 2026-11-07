@@ -173,4 +173,15 @@ import XCTest
         let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = "walkthrough-foreground-retains-workflow"; attachment.lifetime = .keepAlways; add(attachment)
     }
 
+    func testFailedWalkthroughStatusAppearsBeforeSourcePreview() {
+        let app = application(server: "http://127.0.0.1:18580/gittok/walkthrough-failed")
+        app.launch()
+        let card = app.buttons["repo.example/row-report"]
+        XCTAssertTrue(card.waitForExistence(timeout: 15)); card.tap()
+        let message = app.staticTexts["walkthrough.message"]
+        XCTAssertTrue(message.waitForExistence(timeout: 10))
+        XCTAssertTrue(message.isHittable, "Generation failure must be visible without scrolling past the source preview.")
+        XCTAssertLessThan(message.frame.minY, app.staticTexts["preview.title"].frame.minY)
+    }
+
 }

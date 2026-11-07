@@ -34,7 +34,6 @@ struct DetailView: View {
                         StateMessage(title: "Preview unavailable", message: error, symbol: "doc.text.magnifyingglass")
                         Button("Try again") { Task { await load() } }.buttonStyle(FolioButtonStyle()).accessibilityIdentifier("detail.retry")
                     } else if let repo = store.preview {
-                        PreviewPlayer(repo: repo, onEvidence: { evidence = EvidencePresentation(repo: repo, selectedID: $0) }, active: evidence == nil)
                         if let progress = store.walkthroughProgress {
                             HStack(spacing: 10) {
                                 ProgressView().controlSize(.small)
@@ -43,6 +42,7 @@ struct DetailView: View {
                         } else if let message = store.walkthroughMessage {
                             Text(message).font(.caption).foregroundStyle(Folio.secondary).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("walkthrough.message")
                         }
+                        PreviewPlayer(repo: repo, onEvidence: { evidence = EvidencePresentation(repo: repo, selectedID: $0) }, active: evidence == nil)
                         identity(repo)
                         interestContext(repo)
                         sourceContext(repo)
