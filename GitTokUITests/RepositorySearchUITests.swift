@@ -55,3 +55,23 @@ import XCTest
         XCTAssertFalse(app.staticTexts["search.empty"].exists)
     }
 }
+
+@MainActor final class RepositorySearchLiveUITests: XCTestCase {
+    func testRealPublicMetadataSearchOutsideDiscover() throws {
+        guard ProcessInfo.processInfo.environment["GITTOK_LIVE_SEARCH"] == "1" else { throw XCTSkip("Opt-in live metadata search; no walkthrough generation") }
+        let app = XCUIApplication()
+        app.launchEnvironment["GITTOK_BASE_URL"] = ProcessInfo.processInfo.environment["GITTOK_LIVE_SEARCH_BASE_URL"] ?? "http://127.0.0.1:18082"
+        app.launchEnvironment["GITTOK_PREFERENCES_SUITE"] = "dev.gittok.live-search.\(UUID().uuidString)"
+        app.launchForReturningUser()
+        XCTAssertTrue(app.buttons["search.open"].waitForExistence(timeout: 15)); app.buttons["search.open"].tap()
+        let input = app.textFields["feed.search"]
+        XCTAssertTrue(input.waitForExistence(timeout: 5)); input.tap(); input.typeText("excalidraw\n")
+        XCTAssertTrue(app.buttons["search.excalidraw/excalidraw"].waitForExistence(timeout: 25))
+        let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = "actual-github-search-excalidraw"; attachment.lifetime = .keepAlways; add(attachment)
+        app.buttons["search.clear"].tap()
+        input.tap(); input.typeText("pocketbase/pocketbase\n")
+        XCTAssertTrue(app.buttons["search.pocketbase/pocketbase"].waitForExistence(timeout: 25))
+        let exact = XCTAttachment(screenshot: app.screenshot()); exact.name = "actual-github-search-exact-repository"; exact.lifetime = .keepAlways; add(exact)
+        // Do not open either preview: this acceptance run exercises metadata only.
+    }
+}
