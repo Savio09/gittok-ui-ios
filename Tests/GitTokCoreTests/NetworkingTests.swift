@@ -29,6 +29,18 @@ final class NetworkingTests: XCTestCase {
         let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [StubProtocol.self]
         return APIClient(baseURL: StubProtocol.register(handler), session: URLSession(configuration: config))
     }
+    func testRepositorySearchEncodesQueryAndCursorAsSeparateParameters() async throws {
+        let api = client { request in
+            let components = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!
+            let values = Dictionary(uniqueKeysWithValues: components.queryItems!.map { ($0.name, $0.value!) })
+            XCTAssertEqual(request.url?.path, "/v1/repos/search")
+            XCTAssertEqual(values, ["q": "C++ & language:Swift", "cursor": "a+/b=&?"])
+            XCTAssertNil(request.value(forHTTPHeaderField: "Authorization"))
+            return (200, Data(#"{"items":[],"next_cursor":"next"}"#.utf8))
+        }
+        let page = try await api.search(query: "C++ & language:Swift", cursor: "a+/b=&?")
+        XCTAssertEqual(page.nextCursor, "next")
+    }
     func testHTTPErrorBodySurvivesBoundary() async {
         let api = client { _ in (429, Data(#"{"error":"Rate limit reached"}"#.utf8)) }
         do { _ = try await api.feed(cursor: nil); XCTFail("Expected HTTP error") }

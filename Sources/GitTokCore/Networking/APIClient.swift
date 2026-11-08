@@ -1,11 +1,12 @@
 import Foundation
 
 public enum APIError: LocalizedError, Equatable, Sendable {
-    case invalidBaseURL, invalidRepository, invalidResponse, http(Int, String), decoding, transport(String)
+    case invalidBaseURL, invalidRepository, invalidSearch, invalidResponse, http(Int, String), decoding, transport(String)
     public var errorDescription: String? {
         switch self {
         case .invalidBaseURL: "Enter an HTTP or HTTPS server address without credentials, query, or fragment."
         case .invalidRepository: "Enter a GitHub repository as owner/repository."
+        case .invalidSearch: "Enter a search up to 256 bytes without control characters."
         case .invalidResponse: "The server returned an invalid response."
         case .http(let code, let message): "Server error \(code): \(message)"
         case .decoding: "The server response could not be read. Check that this backend supports GitTok’s preview API."
@@ -15,11 +16,13 @@ public enum APIError: LocalizedError, Equatable, Sendable {
 }
 public protocol RepositoryAPI: Sendable {
     func feed(cursor: String?) async throws -> Feed
+    func search(query: String, cursor: String?) async throws -> Feed
     func preview(_ address: RepoAddress) async throws -> RepoPreview
     func startWalkthrough(_ address: RepoAddress) async throws -> WalkthroughJob
     func walkthrough(_ id: String) async throws -> WalkthroughJob
 }
 extension RepositoryAPI {
+    public func search(query: String, cursor: String?) async throws -> Feed { throw APIError.http(501, "Repository search is unavailable on this backend.") }
     public func startWalkthrough(_ address: RepoAddress) async throws -> WalkthroughJob { throw APIError.http(501, "Walkthrough unavailable") }
     public func walkthrough(_ id: String) async throws -> WalkthroughJob { throw APIError.http(501, "Walkthrough unavailable") }
 }
@@ -43,6 +46,18 @@ public struct APIClient: RepositoryAPI, Sendable {
     public func feed(cursor: String?) async throws -> Feed {
         var components = URLComponents(url: baseURL.appendingPathComponent("v1/feed"), resolvingAgainstBaseURL: false)!
         if let cursor, !cursor.isEmpty { components.queryItems = [URLQueryItem(name: "cursor", value: cursor)] }
+        return try await get(components.url!)
+    }
+    public static func validatedSearchQuery(_ value: String) throws -> String {
+        let query = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty, query.utf8.count <= 256,
+              !value.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) else { throw APIError.invalidSearch }
+        return query
+    }
+    public func search(query: String, cursor: String?) async throws -> Feed {
+        var components = URLComponents(url: baseURL.appendingPathComponent("v1/repos/search"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [URLQueryItem(name: "q", value: try Self.validatedSearchQuery(query))]
+        if let cursor, !cursor.isEmpty { components.queryItems!.append(URLQueryItem(name: "cursor", value: cursor)) }
         return try await get(components.url!)
     }
     public func preview(_ address: RepoAddress) async throws -> RepoPreview {

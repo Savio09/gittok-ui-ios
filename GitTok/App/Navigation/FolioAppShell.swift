@@ -11,6 +11,7 @@ private enum AppSheet: String, Identifiable { case search, filters, lookup, sett
 struct FolioAppShell: View {
     let api: any RepositoryAPI
     @State private var feed: FeedStore
+    @State private var search: RepositorySearchStore
     @State private var preferences: DiscoveryPreferences
     @State private var tab = AppTab.discover
     @State private var personalized = false
@@ -29,6 +30,7 @@ struct FolioAppShell: View {
     init(api: any RepositoryAPI, owner: PreferenceOwner = .guest) {
         self.api = api
         _feed = State(initialValue: FeedStore(api: api))
+        _search = State(initialValue: RepositorySearchStore(api: api))
         let suite = ProcessInfo.processInfo.environment["GITTOK_PREFERENCES_SUITE"]
         let defaults = suite.flatMap(UserDefaults.init(suiteName:)) ?? .standard
         let profile = DiscoveryPreferences(defaults: defaults, owner: owner)
@@ -63,7 +65,7 @@ struct FolioAppShell: View {
         .sheet(item: $sheet, onDismiss: finishSheet) { item in
             switch item {
             case .search:
-                FolioSearchSheet(repos: results, query: $query, onOpen: { repo in pendingRoute = route(for: repo, evidence: false) }, onLookup: { pendingLookup = true })
+                FolioSearchSheet(store: search, onOpen: { repo in pendingRoute = route(for: repo, evidence: false) }, onLookup: { pendingLookup = true })
             case .filters:
                 FolioFilterSheet(selection: $filter, languages: languages, count: results.count)
             case .lookup: LookupView { address in pendingRoute = RepositoryRoute(address: address) }
